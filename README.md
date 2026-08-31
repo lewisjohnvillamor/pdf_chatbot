@@ -23,11 +23,79 @@ predictable ways. This project addresses each one:
 | Fixed-size splits cut sentences in half and lose the page number | Structure-aware chunking packs whole paragraphs and records the page span |
 | Repeated boilerplate gets embedded once per page | SimHash near-duplicate collapsing removes it before embedding |
 | Pure vector search misses exact terms (`Article 7(b)`, `NADPH`) | Hybrid BM25 + dense retrieval fused with Reciprocal Rank Fusion |
+| Nobody knows whether any of it actually helps | A labelled gold set and a retrieval eval harness — see [Measuring retrieval](#measuring-retrieval) |
 | Top-k returns six near-copies of one paragraph | Maximal Marginal Relevance diversifies the context |
 | The model cites a page that doesn't support the claim | A second verification pass checks each claim against the excerpts |
 | The model invents `[S7]` when only 5 sources exist | Fabricated citation markers are detected and stripped |
 | Re-uploading the same PDF re-pays the whole embedding bill | Content-hash fingerprinting caches the built index |
 | The corpus dies with the process | Optional Postgres + pgvector persistence, shared across replicas |
+
+---
+
+## Measuring retrieval
+
+Generation quality is downstream of retrieval: if the passage containing the
+answer never reaches the prompt, no model and no prompt can recover it. So the
+project ships a labelled gold set (22 scored questions plus a negative control)
+and a harness that runs the **whole production path** — real PDFs through
+ingest, clean, chunk, embed, index — and reports recall@k, MRR and nDCG@k.
+
+```bash
+make eval        # offline, no API cost
+make eval-real   # uses your configured embedding provider
+```
+
+### What the offline run currently reports
+
+```
+Corpus: 4 documents, 22 passages at chunk_size=400
+Gold set: 22 scored questions (+1 negative control), k=5
+
+configuration               recall@k     MRR   nDCG@k  misses   cover
+---------------------------------------------------------------------
+BM25 only                      0.864   0.841    0.828       3   23%
+hybrid w=0.25                  0.864   0.841    0.828       3   23%
+hybrid w=0.5                   0.864   0.841    0.828       3   23%
+hybrid w=0.75                  0.864   0.841    0.828       3   23%
+dense only                     0.864   0.841    0.828       3   23%
+```
+
+**Every configuration scores identically, and the harness says so.** The
+offline embedder is a hashed bag-of-words — the same signal BM25 already uses —
+so the two rankers return the same order and RRF has nothing to fuse. This run
+*cannot* tell you what to set `HYBRID_DENSE_WEIGHT` to, and the tool refuses to
+crown a winner rather than manufacturing one. Run `make eval-real` against a
+real embedding model to get an answer you can act on.
+
+That is the honest current state: **the hybrid retrieval is implemented and
+tested, but its benefit over BM25 alone is not yet demonstrated on this
+corpus.** The eval exists so that claim can be settled with numbers instead of
+argument.
+
+### Guards against fooling yourself
+
+The harness refuses to produce misleading numbers:
+
+- **Degenerate corpus** — if the corpus has fewer than `2 × k` passages it
+  exits with an error, because every configuration would trivially score 1.0.
+- **Coverage confound** — a `cover` column reports what fraction of the corpus
+  top-k returns, and rows above 25% are flagged `!`. Chunking at 700 characters
+  scores a perfect 1.000 recall on this corpus, but does it at 42% coverage —
+  it "wins" by returning most of the corpus, not by ranking well. Flagged, not
+  celebrated.
+- **Negative controls** — a question the corpus cannot answer is excluded from
+  ranking metrics. Retrieval always returns its nearest passages; refusing is
+  the generator's job, tested separately in `tests/test_rag.py`.
+
+### The three questions retrieval currently misses
+
+Kept visible rather than hidden, because they describe the real failure modes:
+
+| Question | Wanted | Why it's hard |
+| --- | --- | --- |
+| "What does Article 7(c) allow?" | `extension of up to 30 days` | Rare identifier with near-identical sibling clauses 7(a)/7(b) |
+| "What is the maximum fine in one reporting period?" | `capped at 3000 euros` | Paraphrase — "maximum fine" never appears as those words |
+| "Why could factories move away from rivers?" | `steam engine` | Causal question; the answer is stated indirectly |
 
 ---
 
@@ -160,6 +228,7 @@ Question ───────────────────────�
 | `pdfchat/grounding.py` | Post-generation claim verification |
 | `pdfchat/citations.py` | Marker resolution and fabrication stripping |
 | `pdfchat/study.py` | Summaries, glossaries, flashcards, quizzes |
+| `pdfchat/evaluation.py` | Ranking metrics, config sweeps, confound detection |
 | `pdfchat/service.py` | Composition root |
 | `app.py` | Streamlit UI — presentation only |
 
@@ -210,6 +279,15 @@ make help         # all available targets
   cited passages are always shown so you can confirm for yourself.
 - The rate limiter is per-process. Across multiple replicas, enforce limits at
   the reverse proxy.
+- **Hybrid retrieval is unproven on the shipped corpus.** See
+  [Measuring retrieval](#measuring-retrieval). The mechanism is implemented and
+  unit-tested; whether it beats BM25 alone on *your* documents is a question
+  `make eval-real` answers, and the answer may be no.
+- There is no cross-encoder reranker. That is usually the next largest win
+  after hybrid retrieval, and the eval harness is the right place to justify
+  adding one.
+- Token counts in the cost panel come from the provider; the `chunk_size`
+  budget uses a ~4-characters-per-token estimate, which is approximate.
 
 ## Licence
 

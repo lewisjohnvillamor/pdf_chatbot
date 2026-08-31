@@ -24,6 +24,12 @@ fmt:  ## Auto-format and fix what can be fixed
 	ruff format .
 	ruff check --fix .
 
+eval:  ## Measure retrieval quality against the labelled gold set (offline)
+	python evals/run_eval.py --sweep-chunk-size
+
+eval-real:  ## Same, using the configured embedding provider (costs money)
+	python evals/run_eval.py --real-embeddings --sweep-chunk-size
+
 check: lint test  ## Everything CI runs
 
 run:  ## Start the app locally

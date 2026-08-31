@@ -1,0 +1,26 @@
+INTRODUCTORY ECONOMICS NOTES
+CHAPTER ONE: SUPPLY AND DEMAND
+Demand describes the quantity of a good that buyers are willing to purchase
+at each price. The demand curve normally slopes downward.
+Supply describes the quantity producers are willing to sell at each price.
+Market equilibrium occurs where the quantity supplied equals the quantity
+demanded and there is no tendency for price to change.
+A price ceiling set below equilibrium produces a persistent shortage.
+A price floor set above equilibrium produces a persistent surplus.
+CHAPTER TWO: ELASTICITY
+Price elasticity of demand measures how responsive quantity demanded is to
+a change in price. Demand is elastic when the elasticity exceeds one.
+Goods with close substitutes tend to have more elastic demand.
+Necessities such as basic food staples tend to have inelastic demand.
+CHAPTER THREE: MARKET STRUCTURES
+Perfect competition features many small firms selling an identical product
+with free entry and exit from the market.
+A monopoly is a single seller facing the entire market demand curve and
+able to set price above marginal cost.
+An oligopoly is a market dominated by a small number of large firms whose
+pricing decisions are interdependent.
+CHAPTER FOUR: MACROECONOMIC POLICY
+Fiscal policy uses government spending and taxation to influence demand.
+Monetary policy uses interest rates and the money supply.
+Raising interest rates typically reduces borrowing and slows inflation.
+Gross domestic product measures the total value of output in an economy.

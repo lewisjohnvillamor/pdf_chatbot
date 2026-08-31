@@ -38,6 +38,12 @@ jobs:
       - name: Verify the app imports cleanly
         run: python -c "import ast; ast.parse(open('app.py').read())"
 
+      # Runs offline with hashed embeddings, so it costs nothing and cannot
+      # flake on a provider outage. It guards the harness and the gold set
+      # against regressions, not absolute retrieval quality.
+      - name: Retrieval evaluation (offline)
+        run: python evals/run_eval.py
+
   docker:
     runs-on: ubuntu-latest
     steps:
