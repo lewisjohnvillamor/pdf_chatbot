@@ -25,6 +25,7 @@ from .config import Settings
 from .embeddings import Embedder
 from .lexical import BM25, tokenize
 from .models import Chunk, ScoredChunk, Usage
+from .reranking import Reranker
 from .stores.base import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -52,12 +53,30 @@ def maximal_marginal_relevance(
     *,
     k: int,
     lambda_mult: float = 0.6,
+    relevance: np.ndarray | None = None,
 ) -> list[int]:
-    """Select ``k`` candidate indices balancing relevance against redundancy."""
+    """Select ``k`` candidate indices balancing relevance against redundancy.
+
+    ``relevance`` supplies the relevance term from upstream — fusion or, when
+    enabled, the reranker. Pass it whenever a better ranking than raw embedding
+    similarity exists: deriving relevance from ``query_vector`` here would
+    silently discard the reranker's judgement, which is the whole reason the
+    reranker was paid for. Embeddings are still used for the redundancy term,
+    which is what they are good at.
+    """
     if candidate_vectors.size == 0:
         return []
     k = min(k, len(candidate_vectors))
-    relevance = candidate_vectors @ np.asarray(query_vector, dtype=np.float32).reshape(-1)
+    if relevance is None:
+        relevance = candidate_vectors @ np.asarray(query_vector, dtype=np.float32).reshape(-1)
+    else:
+        relevance = np.asarray(relevance, dtype=np.float32).reshape(-1)
+        if len(relevance) != len(candidate_vectors):
+            raise ValueError("relevance must have one score per candidate")
+        # Rescale to [0, 1] so the lambda tradeoff means the same thing
+        # regardless of whether scores are RRF sums or cross-encoder logits.
+        span = float(relevance.max() - relevance.min())
+        relevance = (relevance - relevance.min()) / span if span > 0 else np.ones_like(relevance)
     selected: list[int] = [int(np.argmax(relevance))]
     while len(selected) < k:
         # Penalize each remaining candidate by its similarity to what we already took.
@@ -91,10 +110,17 @@ class HybridRetriever:
     new uploads without a separate invalidation protocol.
     """
 
-    def __init__(self, store: VectorStore, embedder: Embedder, settings: Settings):
+    def __init__(
+        self,
+        store: VectorStore,
+        embedder: Embedder,
+        settings: Settings,
+        reranker: Reranker | None = None,
+    ):
         self._store = store
         self._embedder = embedder
         self._settings = settings
+        self._reranker = reranker
         self._bm25: BM25 | None = None
         self._bm25_chunks: list[Chunk] = []
         self._bm25_signature: tuple[str, int] | None = None
@@ -170,6 +196,33 @@ class HybridRetriever:
         ordered = sorted(fused.items(), key=lambda pair: pair[1], reverse=True)
         candidate_ids = [chunk_id for chunk_id, _ in ordered][: settings.candidate_k]
 
+        # --- precision: rerank the shortlist ---------------------------
+        # Runs before MMR so diversification operates on correctly ordered
+        # candidates rather than reshuffling fusion noise.
+        if self._reranker is not None and len(candidate_ids) > 1:
+            shortlist = [
+                ScoredChunk(
+                    chunk=by_id[chunk_id],
+                    score=fused.get(chunk_id, 0.0),
+                    dense_score=dense_scores.get(chunk_id, 0.0),
+                    lexical_score=lexical_scores.get(chunk_id, 0.0),
+                )
+                for chunk_id in candidate_ids[: settings.rerank_candidates]
+                if chunk_id in by_id
+            ]
+            reranked, rerank_usage = self._reranker.rerank(
+                question, shortlist, top_k=settings.rerank_candidates
+            )
+            usage = usage.add(rerank_usage)
+            if reranked:
+                # Reranked order replaces fusion order for everything downstream.
+                reranked_ids = [scored.chunk.chunk_id for scored in reranked]
+                tail = [cid for cid in candidate_ids if cid not in set(reranked_ids)]
+                candidate_ids = reranked_ids + tail
+                fused = {
+                    scored.chunk.chunk_id: float(scored.score) for scored in reranked
+                } | dict.fromkeys(tail, 0.0)
+
         # --- diversity -------------------------------------------------
         if query_vector is not None and len(candidate_ids) > settings.top_k:
             candidate_vectors = self._vectors_for(candidate_ids, collection)
@@ -179,6 +232,11 @@ class HybridRetriever:
                     candidate_vectors,
                     k=settings.top_k,
                     lambda_mult=settings.mmr_lambda,
+                    # Carry the upstream ranking through, so diversification
+                    # refines the reranker's order instead of replacing it.
+                    relevance=np.array(
+                        [fused.get(cid, 0.0) for cid in candidate_ids], dtype=np.float32
+                    ),
                 )
                 candidate_ids = [candidate_ids[i] for i in order]
 

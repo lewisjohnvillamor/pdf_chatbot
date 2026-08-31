@@ -22,6 +22,7 @@ _TABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ChatProvider = Literal["anthropic", "openai"]
 EmbeddingProvider = Literal["openai", "local", "none"]
 VectorStoreBackend = Literal["memory", "postgres"]
+RerankerBackend = Literal["none", "cross-encoder", "llm"]
 
 #: Chat models we know how to price, in USD per 1M tokens (input, output).
 #: Override or extend at runtime with PDFCHAT_PRICE_OVERRIDES, e.g.
@@ -145,6 +146,12 @@ class Settings:
     mmr_lambda: float = 0.6
     min_hybrid_score: float = 0.0
     hybrid_dense_weight: float = 0.5
+    #: Precision stage applied to the fused candidates before top-k.
+    reranker: RerankerBackend = "none"
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    #: Candidates handed to the reranker. Larger means better recall into the
+    #: precision stage, at a linear cost in reranking time.
+    rerank_candidates: int = 20
 
     # --- storage ---------------------------------------------------------
     vector_store: VectorStoreBackend = "memory"
@@ -195,6 +202,12 @@ class Settings:
             raise ConfigError("CHUNK_OVERLAP must be smaller than CHUNK_SIZE")
         if self.top_k > self.candidate_k:
             raise ConfigError("TOP_K must not exceed CANDIDATE_K")
+        if self.reranker not in ("none", "cross-encoder", "llm"):
+            raise ConfigError(
+                f"Unknown RERANKER {self.reranker!r}; expected 'none', 'cross-encoder' or 'llm'."
+            )
+        if self.reranker != "none" and self.rerank_candidates < self.top_k:
+            raise ConfigError("RERANK_CANDIDATES must be at least TOP_K")
         if self.vector_store not in ("memory", "postgres"):
             raise ConfigError(f"Unknown VECTOR_STORE {self.vector_store!r}")
         if self.vector_store == "postgres":
@@ -263,6 +276,9 @@ def load_settings() -> Settings:
         candidate_k=_env_int("CANDIDATE_K", 30),
         mmr_lambda=_env_float("MMR_LAMBDA", 0.6, minimum=0.0, maximum=1.0),
         hybrid_dense_weight=_env_float("HYBRID_DENSE_WEIGHT", 0.5, minimum=0.0, maximum=1.0),
+        reranker=_env_str("RERANKER", "none").lower(),  # type: ignore[arg-type]
+        reranker_model=_env_str("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+        rerank_candidates=_env_int("RERANK_CANDIDATES", 20),
         enable_self_check=_env_bool("ENABLE_SELF_CHECK", True),
         enable_streaming=_env_bool("ENABLE_STREAMING", True),
         vector_store=_env_str("VECTOR_STORE", "memory").lower(),  # type: ignore[arg-type]

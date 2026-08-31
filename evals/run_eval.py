@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import io
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -103,6 +104,14 @@ class TextUpload:
         return buffer.getvalue()
 
 
+def _chat_model():
+    """Build the configured chat model, for the LLM reranker only."""
+    from pdfchat.config import load_settings
+    from pdfchat.llm import build_chat_model
+
+    return build_chat_model(load_settings())
+
+
 def index_corpus(uploads, settings, embedder):
     """Build a fresh index for one configuration."""
     store = MemoryVectorStore(dimensions=embedder.dimensions)
@@ -133,6 +142,12 @@ def main() -> int:
         "--sweep-chunk-size",
         action="store_true",
         help="also compare chunk sizes at the best dense weight",
+    )
+    parser.add_argument(
+        "--rerank",
+        choices=["none", "cross-encoder", "llm"],
+        action="append",
+        help="measure a reranker against no reranking; repeatable",
     )
     parser.add_argument("--verbose", action="store_true", help="list every missed question")
     args = parser.parse_args()
@@ -208,6 +223,41 @@ def main() -> int:
     else:
         best = max(results, key=lambda r: (r.recall, r.mrr))
         print(f"\nBest configuration: {best.label}")
+
+    if args.rerank:
+        from pdfchat.reranking import build_reranker
+
+        print("\nReranker comparison (at the best dense weight):")
+        weight = best.dense_weight if best.dense_weight is not None else 0.5
+        tuned = settings.with_overrides(hybrid_dense_weight=weight)
+        rerank_results = []
+        for backend in ["none", *[b for b in dict.fromkeys(args.rerank) if b != "none"]]:
+            configured = tuned.with_overrides(
+                reranker=backend, rerank_candidates=max(20, tuned.top_k)
+            )
+            try:
+                reranker = build_reranker(configured, _chat_model() if backend == "llm" else None)
+            except Exception as exc:  # missing dependency or credentials
+                print(f"  skipped {backend}: {exc}")
+                continue
+            started = time.perf_counter()
+            rerank_results.append(
+                evaluate(
+                    HybridRetriever(store, embedder, configured, reranker=reranker),
+                    cases,
+                    collection=COLLECTION,
+                    k=configured.top_k,
+                    label=f"rerank={backend}",
+                    corpus_size=store.count(COLLECTION),
+                )
+            )
+            elapsed = (time.perf_counter() - started) / max(1, len(cases)) * 1000
+            print(f"  {backend}: {elapsed:.0f} ms/query")
+        if len(rerank_results) > 1:
+            print()
+            print(format_table(rerank_results))
+        elif rerank_results:
+            print("\n  Only the baseline ran; nothing to compare against.")
 
     if args.sweep_chunk_size:
         print("\nChunk-size sweep (at the best dense weight):")

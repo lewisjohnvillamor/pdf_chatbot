@@ -16,6 +16,7 @@ from .indexing import IndexReport, build_index
 from .ingest import UploadedFile
 from .llm import ChatModel, build_chat_model
 from .rag import RagPipeline
+from .reranking import build_reranker
 from .retrieval import HybridRetriever
 from .stores import build_store
 from .stores.base import VectorStore
@@ -74,7 +75,8 @@ def build_service(settings: Settings, *, collection: str = DEFAULT_COLLECTION) -
     embedder = build_embedder(settings)
     store = build_store(settings, dimensions=embedder.dimensions)
     model = build_chat_model(settings)
-    retriever = HybridRetriever(store, embedder, settings)
+    reranker = build_reranker(settings, model)
+    retriever = HybridRetriever(store, embedder, settings, reranker=reranker)
     pipeline = RagPipeline(retriever, model, settings)
     history = build_history_store(settings)
     logger.info(
@@ -84,6 +86,7 @@ def build_service(settings: Settings, *, collection: str = DEFAULT_COLLECTION) -
             "chat_model": settings.chat_model,
             "embedding_provider": settings.embedding_provider,
             "vector_store": settings.vector_store,
+            "reranker": settings.reranker,
             "dimensions": embedder.dimensions,
         },
     )

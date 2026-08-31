@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 486" width="900" height="486" font-family="ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="900" height="486" rx="10" fill="#ffffff"/>
+  <style>
+    .t{fill:#0f172a;font-size:13px}
+    .m{fill:#334155;font-size:12.5px}
+    .s{fill:#64748b;font-size:11px}
+    .cite{fill:#2563eb;font-size:12.5px;font-weight:700}
+    .note{fill:#b45309;font-size:11px;font-style:italic}
+    .h{fill:#0f172a;font-size:14px;font-weight:700}
+  </style>
+  <defs>
+    <marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <text x="28" y="32" class="h">Anatomy of a grounded answer</text>
+  <text x="28" y="50" class="s">Illustration of the answer UI — every element below is produced by the pipeline, not decoration.</text>
+
+  <rect x="28" y="66" width="560" height="40" rx="8" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <text x="44" y="91" class="m">Where does cellular respiration take place, and how much ATP does it yield?</text>
+
+  <rect x="28" y="118" width="560" height="112" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="44" y="144" class="m">Cellular respiration takes place in the mitochondria of eukaryotic</text>
+  <text x="44" y="164" class="m">cells <tspan class="cite">[S1]</tspan>. It yields approximately 32 molecules of ATP per molecule</text>
+  <text x="44" y="184" class="m">of glucose consumed <tspan class="cite">[S1]</tspan>. Glycolysis, the first stage, occurs in the</text>
+  <text x="44" y="204" class="m">cytoplasm and does not require oxygen <tspan class="cite">[S2]</tspan>.</text>
+
+  <rect x="28" y="242" width="560" height="30" rx="6" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="44" y="262" class="t">✅ Every claim checks out against the cited passages.</text>
+
+  <rect x="28" y="284" width="560" height="176" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="44" y="308" class="t">📎 Sources — 4 passages retrieved</text>
+
+  <text x="44" y="334" class="cite">[S1]</text>
+  <text x="80" y="334" class="t">biology.pdf, p. 2 — CHAPTER TWO</text>
+  <text x="500" y="334" class="s">✓ cited</text>
+  <text x="44" y="350" class="s">relevance 0.0164 · semantic 0.812 · keyword 6.41</text>
+  <text x="44" y="368" class="s">"...it takes place in the mitochondria and yields approximately 32..."</text>
+
+  <line x1="44" y1="382" x2="572" y2="382" stroke="#e2e8f0"/>
+
+  <text x="44" y="404" class="cite">[S2]</text>
+  <text x="80" y="404" class="t">biology.pdf, p. 2 — CHAPTER TWO</text>
+  <text x="500" y="404" class="s">✓ cited</text>
+  <text x="44" y="420" class="s">relevance 0.0161 · semantic 0.774 · keyword 3.02</text>
+  <text x="44" y="438" class="s">"...Glycolysis occurs in the cytoplasm and does not require oxygen."</text>
+
+  <path d="M600 160 L640 160" stroke="#b45309" stroke-width="1.4" fill="none" marker-end="url(#p)"/>
+  <text x="648" y="150" class="note">Markers resolve to a real file</text>
+  <text x="648" y="165" class="note">and page. Invented ones —</text>
+  <text x="648" y="180" class="note">[S7] with 4 sources — are</text>
+  <text x="648" y="195" class="note">detected and stripped.</text>
+
+  <path d="M600 257 L640 257" stroke="#b45309" stroke-width="1.4" fill="none" marker-end="url(#p)"/>
+  <text x="648" y="248" class="note">A second pass checks each</text>
+  <text x="648" y="263" class="note">claim against the excerpts.</text>
+  <text x="648" y="278" class="note">⚠️ and 🚩 are the other verdicts.</text>
+
+  <path d="M600 350 L640 350" stroke="#b45309" stroke-width="1.4" fill="none" marker-end="url(#p)"/>
+  <text x="648" y="336" class="note">Retrieved passages are always</text>
+  <text x="648" y="351" class="note">shown — including uncited ones —</text>
+  <text x="648" y="366" class="note">with the keyword and semantic</text>
+  <text x="648" y="381" class="note">scores that selected them, so you</text>
+  <text x="648" y="396" class="note">can check the answer yourself.</text>
+</svg>

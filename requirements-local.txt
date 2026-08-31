@@ -1,4 +1,7 @@
-# Optional: on-device embeddings for EMBEDDING_PROVIDER=local.
-# Pulls in PyTorch (~2 GB), so it is deliberately kept out of requirements.txt.
+# Optional local models:
+#   EMBEDDING_PROVIDER=local   -> on-device embeddings
+#   RERANKER=cross-encoder     -> on-device cross-encoder reranking
+# Both come from sentence-transformers, which pulls in PyTorch (~2 GB), so this
+# is deliberately kept out of requirements.txt.
 -r requirements.txt
 sentence-transformers>=3.0.0,<6.0.0

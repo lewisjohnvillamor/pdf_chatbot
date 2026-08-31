@@ -148,3 +148,46 @@ def test_new_documents_are_visible_after_invalidate(settings, fake_embedder):
     retriever.invalidate()
     result = retriever.retrieve("osmosis semipermeable", collection="c")
     assert "osmosis" in result.chunks[0].chunk.text.lower()
+
+
+def test_mmr_uses_supplied_relevance_over_embedding_similarity():
+    """The reranker's judgement must survive diversification.
+
+    Without this, MMR recomputes relevance from the query embedding and
+    silently discards whatever the (expensive) reranker decided.
+    """
+    query = np.array([1.0, 0.0], dtype=np.float32)
+    candidates = _unit([[1.0, 0.02], [0.0, 1.0]])
+    # Embedding similarity strongly prefers index 0; an upstream reranker says
+    # the opposite. With lambda=1.0 (pure relevance) the reranker must win.
+    order = maximal_marginal_relevance(
+        query, candidates, k=2, lambda_mult=1.0, relevance=np.array([0.1, 0.9])
+    )
+    assert order[0] == 1, "MMR ignored the supplied relevance scores"
+
+
+def test_mmr_falls_back_to_embedding_relevance_when_none_supplied():
+    query = np.array([1.0, 0.0], dtype=np.float32)
+    candidates = _unit([[1.0, 0.02], [0.0, 1.0]])
+    assert maximal_marginal_relevance(query, candidates, k=2, lambda_mult=1.0)[0] == 0
+
+
+def test_mmr_rejects_mismatched_relevance_length():
+    import pytest
+
+    with pytest.raises(ValueError, match="one score per candidate"):
+        maximal_marginal_relevance(
+            np.array([1.0, 0.0], dtype=np.float32),
+            _unit([[1.0, 0.0], [0.0, 1.0]]),
+            k=2,
+            relevance=np.array([1.0]),
+        )
+
+
+def test_mmr_handles_uniform_relevance_without_dividing_by_zero():
+    query = np.array([1.0, 0.0], dtype=np.float32)
+    candidates = _unit([[1.0, 0.0], [0.0, 1.0]])
+    order = maximal_marginal_relevance(
+        query, candidates, k=2, lambda_mult=0.5, relevance=np.array([0.5, 0.5])
+    )
+    assert sorted(order) == [0, 1]
