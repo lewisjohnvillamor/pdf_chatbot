@@ -1,0 +1,39 @@
+CELL BIOLOGY REVISION NOTES
+CHAPTER ONE: PHOTOSYNTHESIS
+Photosynthesis converts light energy into chemical energy stored as glucose.
+It occurs in the chloroplasts of plant cells and requires water and carbon
+dioxide as raw inputs. The light-dependent reactions take place in the
+thylakoid membranes and generate ATP and NADPH.
+CHAPTER TWO: CELLULAR RESPIRATION
+Cellular respiration releases the energy stored in glucose molecules.
+In eukaryotic cells it takes place in the mitochondria and yields
+approximately 32 molecules of ATP per molecule of glucose consumed.
+Glycolysis occurs in the cytoplasm and does not require oxygen.
+CHAPTER THREE: ENZYMES
+Enzymes are biological catalysts that lower the activation energy of a
+reaction. Each enzyme is specific to a particular substrate shape.
+Enzyme activity is affected by temperature and pH. Most human enzymes
+denature above 40 degrees Celsius and lose their catalytic function.
+CHAPTER FOUR: CELL DIVISION
+Mitosis produces two genetically identical diploid daughter cells.
+Meiosis produces four genetically distinct haploid gametes and involves
+crossing over during prophase I, which increases genetic variation.
+CHAPTER FIVE: MEMBRANE TRANSPORT
+Diffusion moves particles from high concentration to low concentration
+and does not require energy input from the cell.
+Osmosis is the diffusion of water across a semipermeable membrane.
+Active transport moves substances against the concentration gradient and
+consumes ATP produced by respiration.
+Facilitated diffusion uses carrier proteins but still requires no energy.
+CHAPTER SIX: GENETICS
+DNA is a double helix composed of nucleotide bases adenine, thymine,
+guanine and cytosine. Adenine pairs with thymine and guanine pairs
+with cytosine through hydrogen bonding.
+A gene is a sequence of DNA that codes for a specific polypeptide.
+Transcription copies DNA into messenger RNA inside the nucleus.
+Translation assembles the polypeptide at the ribosome.
+CHAPTER SEVEN: HOMEOSTASIS
+Homeostasis maintains a stable internal environment despite external change.
+Insulin lowers blood glucose concentration by promoting uptake into cells.
+Glucagon raises blood glucose by stimulating the breakdown of glycogen.
+Negative feedback loops reverse a deviation from the normal set point.

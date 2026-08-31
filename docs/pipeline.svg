@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" width="960" height="470" font-family="ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <rect width="960" height="470" rx="10" fill="#ffffff"/>
+  <style>
+    .t{fill:#0f172a;font-size:13px}
+    .s{fill:#475569;font-size:11px}
+    .h{fill:#0f172a;font-size:14px;font-weight:700}
+    .lbl{fill:#64748b;font-size:10.5px;letter-spacing:.08em}
+    .box{fill:#f8fafc;stroke:#cbd5e1;stroke-width:1.2;rx:8}
+    .accent{fill:#eff6ff;stroke:#2563eb;stroke-width:1.4}
+    .warn{fill:#fefce8;stroke:#ca8a04;stroke-width:1.4}
+    .ok{fill:#f0fdf4;stroke:#16a34a;stroke-width:1.4}
+    .arw{stroke:#94a3b8;stroke-width:1.6;fill:none;marker-end:url(#a)}
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="34" class="h">Ingestion — runs once per document</text>
+  <text x="30" y="52" class="lbl">THE PART THAT ISN'T AN API CALL</text>
+
+  <rect x="30"  y="66" width="128" height="58" class="box"/>
+  <text x="46" y="90" class="t">PDF upload</text>
+  <text x="46" y="107" class="s">size / page guards</text>
+
+  <rect x="182" y="66" width="150" height="58" class="accent" rx="8"/>
+  <text x="198" y="90" class="t">Clean</text>
+  <text x="198" y="107" class="s">de-hyphenate, headers</text>
+
+  <rect x="356" y="66" width="150" height="58" class="accent" rx="8"/>
+  <text x="372" y="90" class="t">Chunk</text>
+  <text x="372" y="107" class="s">pages + sections kept</text>
+
+  <rect x="530" y="66" width="140" height="58" class="box"/>
+  <text x="546" y="90" class="t">Embed</text>
+  <text x="546" y="107" class="s">openai / local / none</text>
+
+  <rect x="694" y="66" width="236" height="58" class="box"/>
+  <text x="710" y="90" class="t">Vector store</text>
+  <text x="710" y="107" class="s">NumPy + disk cache, or pgvector</text>
+
+  <path d="M158 95 H180" class="arw"/>
+  <path d="M332 95 H354" class="arw"/>
+  <path d="M506 95 H528" class="arw"/>
+  <path d="M670 95 H692" class="arw"/>
+
+  <line x1="30" y1="152" x2="930" y2="152" stroke="#e2e8f0" stroke-width="1"/>
+
+  <text x="30" y="182" class="h">Answering — runs per question</text>
+  <text x="30" y="200" class="lbl">RECALL → PRECISION → GENERATION → VERIFICATION</text>
+
+  <rect x="30" y="228" width="120" height="52" class="box"/>
+  <text x="46" y="251" class="t">Question</text>
+  <text x="46" y="267" class="s">+ doc filter</text>
+
+  <rect x="174" y="212" width="128" height="38" class="box"/>
+  <text x="190" y="236" class="t">BM25</text>
+
+  <rect x="174" y="258" width="128" height="38" class="box"/>
+  <text x="190" y="282" class="t">Dense search</text>
+
+  <rect x="326" y="228" width="112" height="52" class="accent" rx="8"/>
+  <text x="342" y="251" class="t">RRF fusion</text>
+  <text x="342" y="267" class="s">rank-based</text>
+
+  <rect x="462" y="228" width="112" height="52" class="accent" rx="8"/>
+  <text x="478" y="251" class="t">Rerank</text>
+  <text x="478" y="267" class="s">cross-encoder <tspan fill="#94a3b8">(opt-in)</tspan></text>
+
+  <rect x="598" y="228" width="96" height="52" class="accent" rx="8"/>
+  <text x="614" y="251" class="t">MMR</text>
+  <text x="614" y="267" class="s">diversify</text>
+
+  <rect x="718" y="228" width="212" height="52" class="box"/>
+  <text x="734" y="251" class="t">Top-k passages</text>
+  <text x="734" y="267" class="s">each with file + page span</text>
+
+  <path d="M150 244 H172" class="arw"/>
+  <path d="M150 264 L160 264 L160 277 H172" class="arw"/>
+  <path d="M302 231 L314 231 L314 248 H324" class="arw"/>
+  <path d="M302 277 L314 277 L314 260 H324" class="arw"/>
+  <path d="M438 254 H460" class="arw"/>
+  <path d="M574 254 H596" class="arw"/>
+  <path d="M694 254 H716" class="arw"/>
+
+  <rect x="30" y="308" width="180" height="52" class="box"/>
+  <text x="46" y="331" class="t">Prompt</text>
+  <text x="46" y="347" class="s">sources + question</text>
+
+  <rect x="234" y="308" width="164" height="52" class="box"/>
+  <text x="250" y="331" class="t">LLM (streamed)</text>
+  <text x="250" y="347" class="s">Claude or GPT</text>
+
+  <rect x="422" y="308" width="184" height="52" class="warn" rx="8"/>
+  <text x="438" y="331" class="t">Citation check</text>
+  <text x="438" y="347" class="s">strip invented [S7]</text>
+
+  <rect x="630" y="308" width="184" height="52" class="warn" rx="8"/>
+  <text x="646" y="331" class="t">Grounding pass</text>
+  <text x="646" y="347" class="s">claims vs. sources</text>
+
+  <rect x="838" y="308" width="92" height="52" class="ok" rx="8"/>
+  <text x="854" y="331" class="t">Answer</text>
+  <text x="854" y="347" class="s">+ verdict</text>
+
+  <path d="M824 280 L880 280 L880 296 L500 296 L120 296 L120 306" class="arw"/>
+  <path d="M210 334 H232" class="arw"/>
+  <path d="M398 334 H420" class="arw"/>
+  <path d="M606 334 H628" class="arw"/>
+  <path d="M814 334 H836" class="arw"/>
+
+  <rect x="30" y="392" width="900" height="52" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="46" y="414" class="t">Every stage is measured by the eval harness — <tspan font-weight="700">make eval</tspan></text>
+  <text x="46" y="432" class="s">recall@k · MRR · nDCG@k over a labelled gold set, with guards against degenerate corpora and coverage confounds</text>
+</svg>

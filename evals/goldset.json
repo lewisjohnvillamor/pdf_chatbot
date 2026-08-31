@@ -1,0 +1,163 @@
+[
+  {
+    "question": "Where does cellular respiration take place?",
+    "must_contain": [
+      "takes place in the mitochondria"
+    ],
+    "note": "direct lookup - should be easy for any retriever"
+  },
+  {
+    "question": "How much ATP does respiration produce per glucose molecule?",
+    "must_contain": [
+      "32 molecules of ATP"
+    ],
+    "note": "numeric fact"
+  },
+  {
+    "question": "What is the penalty under Article 7(b)?",
+    "must_contain": [
+      "250 euros per"
+    ],
+    "note": "rare exact identifier - the classic dense-retrieval failure"
+  },
+  {
+    "question": "What does Article 7(c) allow?",
+    "must_contain": [
+      "extension of up to 30 days"
+    ],
+    "note": "rare exact identifier, adjacent to near-identical sibling clauses"
+  },
+  {
+    "question": "How long must records be kept?",
+    "must_contain": [
+      "seven years"
+    ],
+    "note": "paraphrase - 'kept' vs 'retain'"
+  },
+  {
+    "question": "What happens to enzymes when things get too hot?",
+    "must_contain": [
+      "denature above 40 degrees"
+    ],
+    "note": "heavy paraphrase - the classic BM25 failure, no shared rare terms"
+  },
+  {
+    "question": "Why does sexual reproduction increase genetic variation?",
+    "must_contain": [
+      "crossing over",
+      "genetically distinct haploid"
+    ],
+    "note": "conceptual - requires connecting meiosis to variation"
+  },
+  {
+    "question": "Which process does not need oxygen?",
+    "must_contain": [
+      "does not require oxygen"
+    ],
+    "note": "paraphrase - 'need' vs 'require'"
+  },
+  {
+    "question": "What is the maximum fine in one reporting period?",
+    "must_contain": [
+      "capped at 3000 euros"
+    ],
+    "note": "numeric fact behind a paraphrase - 'maximum fine' vs 'capped'"
+  },
+  {
+    "question": "How long does the appeals committee have to decide?",
+    "must_contain": [
+      "within 60 days"
+    ],
+    "note": "paraphrase across two sentences"
+  },
+  {
+    "question": "What multiplier applies to repeat breaches?",
+    "must_contain": [
+      "multiplier of 1.5"
+    ],
+    "note": "numeric fact"
+  },
+  {
+    "question": "Where do the light-dependent reactions occur?",
+    "must_contain": [
+      "thylakoid membranes"
+    ],
+    "note": "domain term lookup"
+  },
+  {
+    "question": "What does a price ceiling below equilibrium cause?",
+    "must_contain": [
+      "persistent shortage"
+    ],
+    "note": "distractor: an adjacent sentence describes the price FLOOR / surplus"
+  },
+  {
+    "question": "Which transactions must be reported one by one?",
+    "must_contain": [
+      "exceeding 10000 euros must be reported individually"
+    ],
+    "note": "distractor: the aggregated 50000 threshold sits in the next sentence"
+  },
+  {
+    "question": "What is the deadline in Article 12(a)?",
+    "must_contain": [
+      "within five working days"
+    ],
+    "note": "rare identifier with a near-identical sibling clause 12(b)"
+  },
+  {
+    "question": "How much notice is required before an inspection?",
+    "must_contain": [
+      "14 days notice"
+    ],
+    "note": "distractor: unannounced inspections described immediately after"
+  },
+  {
+    "question": "Which hormone lowers blood sugar?",
+    "must_contain": [
+      "Insulin lowers blood glucose"
+    ],
+    "note": "paraphrase 'blood sugar'; glucagon is the adjacent distractor"
+  },
+  {
+    "question": "Which base pairs with adenine?",
+    "must_contain": [
+      "Adenine pairs with thymine"
+    ],
+    "note": "paraphrase within a dense factual list"
+  },
+  {
+    "question": "Why could factories move away from rivers?",
+    "must_contain": [
+      "steam engine"
+    ],
+    "note": "causal question, answer stated indirectly"
+  },
+  {
+    "question": "What penalty applies for obstructing an inspection?",
+    "must_contain": [
+      "penalty of 5000 euros"
+    ],
+    "note": "distractor: three other euro penalties exist in the same document"
+  },
+  {
+    "question": "What kind of goods have inelastic demand?",
+    "must_contain": [
+      "Necessities such as basic food staples"
+    ],
+    "note": "paraphrase; the elastic-demand sentence is the adjacent distractor"
+  },
+  {
+    "question": "How does active transport differ from diffusion?",
+    "must_contain": [
+      "against the concentration gradient"
+    ],
+    "note": "comparative question spanning adjacent near-identical sentences"
+  },
+  {
+    "question": "What is the capital of France?",
+    "must_contain": [],
+    "note": "NEGATIVE CONTROL: not in the corpus - the system must refuse, not invent",
+    "negative": true
+  }
+]

@@ -1,0 +1,33 @@
+[project]
+name = "pdf-study-assistant"
+version = "1.0.0"
+description = "A citation-grounded study assistant over your own PDFs"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    "E501",    # line length is enforced by the formatter, not the linter
+    "B008",    # Streamlit widgets are legitimately called in defaults
+    "RUF012",  # mutable class attrs are fine on our dataclasses
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+# The cleaning module's glyph table is *made of* ambiguous Unicode characters —
+# flagging them here would flag the feature itself.
+"pdfchat/cleaning.py" = ["RUF001", "RUF003"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning:pdfchat.*"]
+
+[tool.coverage.run]
+source = ["pdfchat"]
+omit = ["pdfchat/cli.py"]
