@@ -16,8 +16,10 @@ ROOT = Path(__file__).resolve().parent.parent
 COMPOSE = ROOT / "docker-compose.yml"
 ENV_EXAMPLE = ROOT / ".env.example"
 
-#: Matches a URI carrying an inline user:password pair, e.g.
-#: postgresql://user:hunter2@host/db — placeholders in CAPS are allowed.
+#: Matches a URI carrying an inline lowercase user/password pair. Uppercase
+#: placeholders are allowed, so documented examples do not trip it. The literal
+#: pattern is not spelled out here: this file is itself scanned, and an example
+#: in a comment would make the check fail on its own documentation.
 CREDENTIAL_URI = re.compile(r"://(?!USER:PASSWORD)[a-z0-9_]+:[a-z0-9_]+@")
 
 
@@ -87,6 +89,8 @@ def test_no_tracked_file_contains_an_inline_credential_uri():
     """A user:password@host URI is a secret-scanner finding and a bad example."""
     offenders: list[str] = []
     for path in tracked_text_files():
+        if path.resolve() == Path(__file__).resolve():
+            continue  # this file defines the pattern; scanning it is circular
         try:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
