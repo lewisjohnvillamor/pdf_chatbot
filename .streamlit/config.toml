@@ -1,0 +1,25 @@
+# Server defaults for a self-hosted deployment.
+# Anything secret belongs in .env, not here — this file is committed.
+
+[server]
+headless = true
+port = 8501
+address = "0.0.0.0"
+maxUploadSize = 50
+# Keep XSRF protection on. If you terminate TLS at a reverse proxy, forward
+# the standard X-Forwarded-* headers rather than turning these off.
+enableXsrfProtection = true
+enableCORS = true
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Users must never see a stack trace; errors are surfaced deliberately by the app.
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#2563eb"

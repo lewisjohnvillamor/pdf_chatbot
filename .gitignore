@@ -1,0 +1,29 @@
+# Secrets — never commit these.
+.env
+.env.*
+!.env.example
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Application data
+.pdfchat_cache/
+data/
+*.pdf
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
