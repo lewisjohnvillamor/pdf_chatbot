@@ -7,7 +7,7 @@
 [![CI](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-205%20passing-brightgreen.svg)](tests/)
 
 </div>
 
@@ -85,13 +85,17 @@ streamlit run app.py          # → http://localhost:8501
 
 ```bash
 cp .env.example .env
-python -m pdfchat.cli hash-password   # prints APP_PASSWORD_HASH=... for .env
 
-# In .env: set your API key, VECTOR_STORE=postgres, and the password hash
+python -m pdfchat.cli hash-password              # → APP_PASSWORD_HASH=... for .env
+echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
+
+# In .env: set your API key and VECTOR_STORE=postgres
 docker compose up -d --build
 ```
 
-Brings up the app plus `pgvector/pgvector:pg16`. The database port is **not**
+Brings up the app plus `pgvector/pgvector:pg16`. There is no default database
+password — compose refuses to start without `POSTGRES_PASSWORD`, rather than
+running with one published in this repository. The database port is **not**
 published — only the app reaches it over the internal network. Chunks,
 embeddings and conversations persist in named volumes across restarts.
 
@@ -289,7 +293,7 @@ make eval       # retrieval metrics
 make help       # all targets
 ```
 
-197 tests. The suite generates real PDFs with reportlab and pushes them through
+205 tests. The suite generates real PDFs with reportlab and pushes them through
 ingest → clean → chunk → embed → index → retrieve → cite. Only the chat provider
 is faked; **no test makes a network call.**
 

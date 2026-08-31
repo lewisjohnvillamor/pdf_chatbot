@@ -1,6 +1,8 @@
 # Self-hosted stack: the app plus a pgvector-enabled Postgres.
 #
-#   cp .env.example .env   # fill in keys, set VECTOR_STORE=postgres
+#   cp .env.example .env
+#   # fill in keys, set VECTOR_STORE=postgres, and generate a DB password:
+#   echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
 #   docker compose up -d --build
 #
 # The database port is deliberately not published; only the app reaches it over
@@ -12,7 +14,9 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pdfchat}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pdfchat}
+      # No default on purpose: compose refuses to start rather than run the
+      # database with a password that is published in this repository.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env - generate one with `openssl rand -base64 24`}"
       POSTGRES_DB: ${POSTGRES_DB:-pdfchat}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -34,7 +38,7 @@ services:
       - .env
     environment:
       # Overrides .env so the app always finds the service on the compose network.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pdfchat}:${POSTGRES_PASSWORD:-pdfchat}@db:5432/${POSTGRES_DB:-pdfchat}
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-pdfchat}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:-pdfchat}"
       CACHE_DIR: /data/cache
     volumes:
       - appcache:/data

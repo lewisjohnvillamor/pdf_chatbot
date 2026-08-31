@@ -79,8 +79,8 @@ class PostgresVectorStore:
     def __init__(self, settings: Settings, *, dimensions: int):
         if not settings.database_url:
             raise ConfigError(
-                "VECTOR_STORE=postgres requires DATABASE_URL, e.g. "
-                "postgresql://pdfchat:pdfchat@localhost:5432/pdfchat"
+                "VECTOR_STORE=postgres requires DATABASE_URL, in the form "
+                "postgresql://USER:PASSWORD@HOST:5432/DBNAME"
             )
         if dimensions <= 0:
             raise ConfigError(
