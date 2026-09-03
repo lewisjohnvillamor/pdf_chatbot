@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -14,10 +13,6 @@ class Page:
     number: int  # 1-indexed, as printed in a PDF viewer
     text: str
     char_count: int = 0
-
-    @property
-    def has_text_layer(self) -> bool:
-        return self.char_count > 0
 
 
 @dataclass(slots=True)
@@ -66,9 +61,6 @@ class Chunk:
         """Human-readable source reference, e.g. ``notes.pdf, pp. 3-4``."""
         base = f"{self.filename}, {self.page_label}"
         return f"{base} — {self.section}" if self.section else base
-
-    def content_hash(self) -> str:
-        return hashlib.sha256(self.text.encode("utf-8")).hexdigest()
 
 
 @dataclass(slots=True)

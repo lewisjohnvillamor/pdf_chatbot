@@ -228,7 +228,6 @@ def looks_like_heading(line: str) -> bool:
 class CleanedPage:
     number: int
     text: str
-    dropped_chars: int
 
 
 def clean_page(text: str, repeated: set[str] | None = None) -> str:
@@ -252,7 +251,5 @@ def clean_document_pages(raw_pages: list[str]) -> list[CleanedPage]:
     cleaned: list[CleanedPage] = []
     for index, page in enumerate(normalized, start=1):
         result = clean_page(page, repeated)
-        cleaned.append(
-            CleanedPage(number=index, text=result, dropped_chars=max(0, len(page) - len(result)))
-        )
+        cleaned.append(CleanedPage(number=index, text=result))
     return cleaned

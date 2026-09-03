@@ -23,7 +23,7 @@ __all__ = [
 
 def build_store(settings: Settings, *, dimensions: int) -> VectorStore:
     """Instantiate the store named by ``VECTOR_STORE``."""
-    backend = getattr(settings, "vector_store", "memory")
+    backend = settings.vector_store
     if backend == "memory":
         return MemoryVectorStore(dimensions=dimensions, cache_dir=settings.cache_dir)
     if backend == "postgres":

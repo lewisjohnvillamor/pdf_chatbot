@@ -45,6 +45,16 @@ def test_clear_removes_only_that_conversation():
     assert len(store.load("two")) == 1
 
 
+def test_clearing_a_conversation_removes_its_transcript():
+    """The sidebar's "Clear conversation" calls this; it must actually delete."""
+    store = MemoryHistoryStore()
+    store.append("c1", "col", Turn("user", "a question"))
+    store.append("c1", "col", Turn("assistant", "an answer [S1]."))
+    assert len(store.load("c1")) == 2
+    store.clear("c1")
+    assert store.load("c1") == []
+
+
 def test_conversation_ids_are_unique():
     assert len({new_conversation_id() for _ in range(50)}) == 50
 

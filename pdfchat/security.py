@@ -11,7 +11,6 @@ import hashlib
 import hmac
 import logging
 import os
-import secrets
 import time
 from dataclasses import dataclass, field
 
@@ -50,8 +49,21 @@ def verify_password(password: str, encoded: str) -> bool:
     return hmac.compare_digest(candidate.hex(), digest_hex)
 
 
-def new_session_token() -> str:
-    return secrets.token_urlsafe(32)
+def session_expired(authenticated_at: float | None, ttl_minutes: int) -> bool:
+    """Has a login aged past its time-to-live?
+
+    Streamlit keeps a session alive for as long as the browser tab holds the
+    websocket, so without an explicit expiry a password gate stays open
+    indefinitely on a shared or unattended machine.
+
+    ``ttl_minutes <= 0`` disables expiry. A missing timestamp counts as
+    expired: a session that cannot prove when it authenticated is not trusted.
+    """
+    if ttl_minutes <= 0:
+        return False
+    if authenticated_at is None:
+        return True
+    return (time.time() - authenticated_at) > ttl_minutes * 60
 
 
 @dataclass(slots=True)

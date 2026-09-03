@@ -12,6 +12,7 @@ Run with::
 from __future__ import annotations
 
 import logging
+import time
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -29,7 +30,7 @@ from pdfchat.history import Turn, new_conversation_id, turn_from_answer
 from pdfchat.logging_setup import configure_logging
 from pdfchat.models import Answer, Usage
 from pdfchat.prompts import EXPLAIN_LEVELS
-from pdfchat.security import RateLimiter, verify_password
+from pdfchat.security import RateLimiter, session_expired, verify_password
 from pdfchat.service import ChatService, build_service
 from pdfchat.study import gather_context, make_flashcards, make_glossary, make_quiz, make_summary
 
@@ -75,6 +76,7 @@ def get_service(_settings: Settings) -> ChatService:
 def init_state(settings: Settings) -> None:
     defaults = {
         "authenticated": not settings.auth_enabled,
+        "authenticated_at": None if settings.auth_enabled else time.time(),
         "conversation_id": new_conversation_id(),
         "answers": [],
         "session_usage": Usage(),
@@ -101,7 +103,15 @@ def init_state(settings: Settings) -> None:
 def login_gate(settings: Settings) -> bool:
     """Show a password prompt when APP_PASSWORD_HASH is configured."""
     if st.session_state.authenticated:
-        return True
+        if settings.auth_enabled and session_expired(
+            st.session_state.authenticated_at, settings.session_ttl_minutes
+        ):
+            logger.info("session_expired", extra={"ttl_minutes": settings.session_ttl_minutes})
+            st.session_state.authenticated = False
+            st.session_state.authenticated_at = None
+            st.warning("Your session expired. Please sign in again.")
+        else:
+            return True
     st.title("📚 PDF Study Assistant")
     st.caption("This instance is password protected.")
     with st.form("login"):
@@ -109,6 +119,7 @@ def login_gate(settings: Settings) -> bool:
         if st.form_submit_button("Sign in", type="primary"):
             if verify_password(password, settings.app_password_hash or ""):
                 st.session_state.authenticated = True
+                st.session_state.authenticated_at = time.time()
                 logger.info("login_success")
                 st.rerun()
             else:
@@ -163,6 +174,9 @@ def render_sidebar(service: ChatService) -> None:
 
         st.divider()
         if st.button("Clear conversation"):
+            # Discard the stored transcript too. A button labelled "Clear" that
+            # silently leaves the conversation in the database is a lie.
+            service.history.clear(st.session_state.conversation_id)
             st.session_state.answers = []
             st.session_state.conversation_id = new_conversation_id()
             st.rerun()

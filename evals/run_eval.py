@@ -199,16 +199,18 @@ def main() -> int:
         return 2
 
     cases = load_goldset(GOLDSET)
-    negatives = sum(1 for case in cases if case.negative)
-    print(
-        f"Gold set: {len(cases) - negatives} scored questions "
-        f"(+{negatives} negative control excluded from ranking metrics), k={args.top_k}\n"
-    )
+    print(f"Gold set: {len(cases)} labelled questions, k={args.top_k}\n")
 
     results: list[EvalResult] = sweep_dense_weight(
         store, embedder, settings, cases, collection=COLLECTION
     )
     print(format_table(results))
+    if results and results[0].skipped_negatives:
+        print(
+            f"\n  {results[0].skipped_negatives} negative control(s) excluded from the "
+            "metrics above:\n  retrieval always returns its nearest passages, so "
+            "refusing is the generator's job."
+        )
 
     if configurations_are_indistinguishable(results):
         print(

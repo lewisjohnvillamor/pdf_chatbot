@@ -9,7 +9,7 @@ was produced is hidden from the learner.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 
 from .citations import extract_citations, find_invalid_markers, strip_invalid_markers
 from .config import Settings
@@ -138,10 +138,3 @@ class RagPipeline:
             return []
         questions = payload.get("questions") or []
         return [str(q).strip() for q in questions if str(q).strip()][:limit]
-
-
-def stream_answer_text(pipeline: RagPipeline, question: str, **kwargs) -> Iterator[str]:
-    """Adapter that turns :meth:`RagPipeline.answer` into a token iterator."""
-    buffer: list[str] = []
-    pipeline.answer(question, on_token=buffer.append, **kwargs)
-    yield from buffer
