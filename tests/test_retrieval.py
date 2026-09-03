@@ -80,6 +80,9 @@ def test_hybrid_retrieval_finds_the_right_passage(settings, fake_embedder):
     result = retriever.retrieve("mitochondria respiration", collection="c")
     assert not result.is_empty
     assert "mitochondria" in result.chunks[0].chunk.text.lower()
+    # Both retrievers must contribute, or "hybrid" is a misnomer.
+    assert result.lexical_hits > 0
+    assert result.dense_hits > 0
 
 
 def test_retrieval_respects_document_filter(settings, fake_embedder):
@@ -110,7 +113,8 @@ def test_retrieval_works_without_embeddings(settings):
     )
     retriever = HybridRetriever(store, embedder, settings)
     result = retriever.retrieve("enzymes activation energy", collection="c")
-    assert result.dense_hits == 0
+    assert result.dense_hits == 0, "no embedder means no dense candidates"
+    assert result.lexical_hits > 0, "BM25 must carry retrieval on its own"
     assert "enzymes" in result.chunks[0].chunk.text.lower()
 
 

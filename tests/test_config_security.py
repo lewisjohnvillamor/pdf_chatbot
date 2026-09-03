@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from pdfchat.config import Settings, load_settings
@@ -106,3 +108,32 @@ def test_rate_limiter_of_zero_is_unlimited():
     limiter = RateLimiter(max_events=0)
     assert all(limiter.allow() for _ in range(100))
     assert limiter.remaining == -1
+
+
+# --- session expiry --------------------------------------------------------
+def test_session_expires_after_its_ttl():
+    from pdfchat.security import session_expired
+
+    now = time.time()
+    assert not session_expired(now, ttl_minutes=60)
+    assert not session_expired(now - 59 * 60, ttl_minutes=60)
+    assert session_expired(now - 61 * 60, ttl_minutes=60)
+
+
+def test_missing_timestamp_counts_as_expired():
+    """A session that cannot prove when it authenticated is not trusted."""
+    from pdfchat.security import session_expired
+
+    assert session_expired(None, ttl_minutes=60)
+
+
+def test_zero_ttl_disables_expiry():
+    from pdfchat.security import session_expired
+
+    assert not session_expired(None, ttl_minutes=0)
+    assert not session_expired(time.time() - 10**6, ttl_minutes=0)
+
+
+def test_session_ttl_is_configurable(monkeypatch):
+    monkeypatch.setenv("SESSION_TTL_MINUTES", "30")
+    assert load_settings().session_ttl_minutes == 30

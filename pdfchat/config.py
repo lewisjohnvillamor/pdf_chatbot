@@ -144,7 +144,6 @@ class Settings:
     top_k: int = 6
     candidate_k: int = 30
     mmr_lambda: float = 0.6
-    min_hybrid_score: float = 0.0
     hybrid_dense_weight: float = 0.5
     #: Precision stage applied to the fused candidates before top-k.
     reranker: RerankerBackend = "none"
@@ -187,10 +186,6 @@ class Settings:
         if name in self.price_overrides:
             return self.price_overrides[name][0]
         return EMBEDDING_PRICES_USD_PER_MTOK.get(name, 0.0)
-
-    @property
-    def api_key_for_chat(self) -> str | None:
-        return self.anthropic_api_key if self.chat_provider == "anthropic" else self.openai_api_key
 
     def validated(self) -> Settings:
         """Return self after checking cross-field invariants."""

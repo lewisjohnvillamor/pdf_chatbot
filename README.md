@@ -7,7 +7,7 @@
 [![CI](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-205%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen.svg)](tests/)
 
 </div>
 
@@ -245,6 +245,7 @@ setting. The ones that matter most:
 | `MMR_LAMBDA` | `0.6` | Lower = more diverse passages |
 | `ENABLE_SELF_CHECK` | `true` | The grounding verification pass |
 | `APP_PASSWORD_HASH` | *(unset)* | **Set this before exposing the app** |
+| `SESSION_TTL_MINUTES` | `720` | Re-authenticate after this long; `0` disables |
 | `RATE_LIMIT_QUESTIONS_PER_HOUR` | `120` | Per session |
 
 Fully offline (no data leaves your machine):
@@ -293,7 +294,7 @@ make eval       # retrieval metrics
 make help       # all targets
 ```
 
-205 tests. The suite generates real PDFs with reportlab and pushes them through
+210 tests. The suite generates real PDFs with reportlab and pushes them through
 ingest → clean → chunk → embed → index → retrieve → cite. Only the chat provider
 is faked; **no test makes a network call.**
 

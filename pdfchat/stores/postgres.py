@@ -23,10 +23,6 @@ from .base import ChunkRecord
 
 logger = logging.getLogger(__name__)
 
-#: Lists for the IVFFlat index. sqrt(rows) is the usual starting point; this
-#: default suits corpora up to ~100k chunks and is tunable via settings.
-DEFAULT_IVFFLAT_LISTS = 100
-
 SCHEMA_SQL = """
 CREATE EXTENSION IF NOT EXISTS vector;
 
