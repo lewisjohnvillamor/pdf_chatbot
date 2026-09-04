@@ -137,3 +137,14 @@ def test_zero_ttl_disables_expiry():
 def test_session_ttl_is_configurable(monkeypatch):
     monkeypatch.setenv("SESSION_TTL_MINUTES", "30")
     assert load_settings().session_ttl_minutes == 30
+
+
+# --- support link ----------------------------------------------------------
+def test_support_link_is_shown_by_default():
+    assert Settings().show_support_link is True
+
+
+def test_support_link_can_be_disabled(monkeypatch):
+    """Anyone hosting this for their own users must be able to remove it."""
+    monkeypatch.setenv("SHOW_SUPPORT_LINK", "false")
+    assert load_settings().show_support_link is False

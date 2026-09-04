@@ -7,7 +7,8 @@
 [![CI](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-214%20passing-brightgreen.svg)](tests/)
+[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support-yellow.svg)](https://buymeacoffee.com/lewisjohnvil)
 
 </div>
 
@@ -245,6 +246,7 @@ setting. The ones that matter most:
 | `MMR_LAMBDA` | `0.6` | Lower = more diverse passages |
 | `ENABLE_SELF_CHECK` | `true` | The grounding verification pass |
 | `APP_PASSWORD_HASH` | *(unset)* | **Set this before exposing the app** |
+| `SHOW_SUPPORT_LINK` | `true` | Sidebar support link; set `false` when hosting for others |
 | `SESSION_TTL_MINUTES` | `720` | Re-authenticate after this long; `0` disables |
 | `RATE_LIMIT_QUESTIONS_PER_HOUR` | `120` | Per session |
 
@@ -294,7 +296,7 @@ make eval       # retrieval metrics
 make help       # all targets
 ```
 
-210 tests. The suite generates real PDFs with reportlab and pushes them through
+214 tests. The suite generates real PDFs with reportlab and pushes them through
 ingest → clean → chunk → embed → index → retrieve → cite. Only the chat provider
 is faked; **no test makes a network call.**
 
@@ -336,6 +338,21 @@ Stated plainly, because a tool that hides these is harder to trust:
 - **The rate limiter is per-process.** Across replicas, enforce at the proxy.
 - **Token estimates for chunk budgeting** use ~4 characters per token. Billing
   always uses the counts the provider reports.
+
+---
+
+## Support the project
+
+This is free and open source, and it stays that way. If it saved you time —
+or if the eval harness caught something in your own retrieval stack — you can
+[buy me a coffee ☕](https://buymeacoffee.com/lewisjohnvil).
+
+Contributions are worth more than coffee, though: a
+[retrieval-quality report](.github/ISSUE_TEMPLATE/retrieval_quality.md) with a
+gold-set case turns a complaint into a regression test, and those compound.
+
+Hosting this for other people? `SHOW_SUPPORT_LINK=false` removes the sidebar
+link.
 
 ---
 

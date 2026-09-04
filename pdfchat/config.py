@@ -168,6 +168,9 @@ class Settings:
     # --- behaviour -------------------------------------------------------
     enable_self_check: bool = True
     enable_streaming: bool = True
+    #: Whether the sidebar shows the project's support link. Anyone hosting
+    #: this for their own users can turn it off with SHOW_SUPPORT_LINK=false.
+    show_support_link: bool = True
     cache_dir: Path = field(default_factory=lambda: Path(".pdfchat_cache"))
     log_level: str = "INFO"
     price_overrides: dict[str, tuple[float, float]] = field(default_factory=dict)
@@ -276,6 +279,7 @@ def load_settings() -> Settings:
         rerank_candidates=_env_int("RERANK_CANDIDATES", 20),
         enable_self_check=_env_bool("ENABLE_SELF_CHECK", True),
         enable_streaming=_env_bool("ENABLE_STREAMING", True),
+        show_support_link=_env_bool("SHOW_SUPPORT_LINK", True),
         vector_store=_env_str("VECTOR_STORE", "memory").lower(),  # type: ignore[arg-type]
         database_url=os.getenv("DATABASE_URL") or None,
         pg_table=_env_str("PG_TABLE", "pdfchat_chunks"),
