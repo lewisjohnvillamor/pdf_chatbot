@@ -104,3 +104,14 @@ def test_no_tracked_file_contains_an_inline_credential_uri():
 @pytest.mark.parametrize("required", ["APP_PASSWORD_HASH", "POSTGRES_PASSWORD", "RERANKER"])
 def test_env_example_documents_every_security_relevant_setting(required):
     assert required in ENV_EXAMPLE.read_text()
+
+
+def test_support_url_is_consistent_across_the_project():
+    """One URL, three places — a stale funding link silently sends money nowhere."""
+    url = "buymeacoffee.com/lewisjohnvil"
+    for path in (ROOT / "README.md", ROOT / "app.py", ROOT / ".github" / "FUNDING.yml"):
+        assert url in path.read_text(), f"{path.name} does not reference {url}"
+
+
+def test_support_link_is_documented_as_optional():
+    assert "SHOW_SUPPORT_LINK" in ENV_EXAMPLE.read_text()

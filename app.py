@@ -43,6 +43,10 @@ def plural(count: int, singular: str, plural_form: str | None = None) -> str:
     return f"{count:,} {word}"
 
 
+SUPPORT_URL = "https://buymeacoffee.com/lewisjohnvil"
+PROJECT_URL = "https://github.com/lewisjohnvillamor/pdf_chatbot"
+
+
 VERDICT_BADGES = {
     "grounded": ("✅", "Every claim checks out against the cited passages."),
     "partially_grounded": ("⚠️", "The main answer holds, but some details are not supported."),
@@ -186,6 +190,19 @@ def render_sidebar(service: ChatService) -> None:
                 indexed=False, summary=None, glossary=None, flashcards=None, quiz=None
             )
             st.rerun()
+
+        render_support_footer(service.settings)
+
+
+def render_support_footer(settings: Settings) -> None:
+    """A quiet footer link. Last in the sidebar, after everything actionable."""
+    if not settings.show_support_link:
+        return
+    st.divider()
+    # Two captions rather than one: the sidebar is ~300px wide, so a single
+    # line wraps mid-phrase and reads like a layout bug.
+    st.caption(f"Free and open source · [Source]({PROJECT_URL})")
+    st.caption(f"[Buy me a coffee ☕]({SUPPORT_URL})")
 
 
 def render_usage_panel(service: ChatService) -> None:
