@@ -11,16 +11,14 @@ that actually runs, not a shortcut around it.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import io
 import sys
 import time
 from pathlib import Path
 
-import numpy as np
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from evals.hashing import HashingEmbedder
 from pdfchat.config import load_settings
 from pdfchat.evaluation import (
     EvalResult,
@@ -31,44 +29,12 @@ from pdfchat.evaluation import (
     sweep_dense_weight,
 )
 from pdfchat.indexing import build_index
-from pdfchat.models import Usage
 from pdfchat.retrieval import HybridRetriever
 from pdfchat.stores.memory import MemoryVectorStore
 
 CORPUS_DIR = Path(__file__).parent / "corpus"
 GOLDSET = Path(__file__).parent / "goldset.json"
 COLLECTION = "eval"
-
-
-class HashEmbedder:
-    """Deterministic hashed bag-of-words vectors.
-
-    Lets the harness run offline and in CI with zero API cost. It captures
-    exact-term overlap but not synonymy, so it *understates* what a real
-    embedding model contributes — dense and hybrid rows are a lower bound.
-    Use --real-embeddings for the numbers you would actually ship on.
-    """
-
-    name = "hash-bow"
-    dimensions = 512
-
-    def _vector(self, text: str) -> np.ndarray:
-        from pdfchat.lexical import tokenize
-
-        vector = np.zeros(self.dimensions, dtype=np.float32)
-        for token in tokenize(text):
-            slot = int.from_bytes(hashlib.blake2b(token.encode(), digest_size=4).digest(), "big")
-            vector[slot % self.dimensions] += 1.0
-        norm = np.linalg.norm(vector)
-        return vector / norm if norm else vector
-
-    def embed_documents(self, texts):
-        if not texts:
-            return np.zeros((0, self.dimensions), dtype=np.float32), Usage()
-        return np.vstack([self._vector(t) for t in texts]), Usage()
-
-    def embed_query(self, text):
-        return self._vector(text).reshape(1, -1), Usage()
 
 
 class TextUpload:
@@ -166,7 +132,7 @@ def main() -> int:
         embedder = build_embedder(settings)
         print(f"Embeddings: {embedder.name} ({embedder.dimensions}d, live API)\n")
     else:
-        embedder = HashEmbedder()
+        embedder = HashingEmbedder()
         print(
             "Embeddings: offline hashed bag-of-words.\n"
             "  Captures exact-term overlap but NOT synonymy, so dense/hybrid rows\n"

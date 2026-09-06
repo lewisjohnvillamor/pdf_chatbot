@@ -186,3 +186,52 @@ def test_shipped_goldset_is_well_formed():
         assert case.question.strip()
         # Every scored case needs something to match against.
         assert case.negative or case.must_contain
+
+
+# --- the shared hashing embedder ------------------------------------------
+def test_hashing_embedder_is_deterministic():
+    """The eval harness depends on this: same corpus, same numbers, every run."""
+    from evals.hashing import HashingEmbedder
+
+    a, b = HashingEmbedder(128), HashingEmbedder(128)
+    left, _ = a.embed_query("cellular respiration in the mitochondria")
+    right, _ = b.embed_query("cellular respiration in the mitochondria")
+    assert (left == right).all()
+
+
+def test_hashing_embedder_vectors_are_unit_length():
+    import numpy as np
+
+    from evals.hashing import HashingEmbedder
+
+    matrix, _ = HashingEmbedder(128).embed_documents(["alpha beta", "gamma delta epsilon"])
+    assert np.allclose(np.linalg.norm(matrix, axis=1), 1.0)
+
+
+def test_hashing_embedder_scores_shared_vocabulary_higher():
+    from evals.hashing import HashingEmbedder
+
+    e = HashingEmbedder(512)
+    query, _ = e.embed_query("mitochondria produce ATP")
+    docs, _ = e.embed_documents(
+        ["the mitochondria produce ATP for the cell", "photosynthesis happens in chloroplasts"]
+    )
+    similarity = docs @ query[0]
+    assert similarity[0] > similarity[1]
+
+
+def test_hashing_embedder_handles_empty_input():
+    from evals.hashing import HashingEmbedder
+
+    matrix, usage = HashingEmbedder(64).embed_documents([])
+    assert matrix.shape == (0, 64)
+    assert usage.embedding_tokens == 0
+
+
+def test_hashing_embedder_rejects_bad_dimensions():
+    import pytest
+
+    from evals.hashing import HashingEmbedder
+
+    with pytest.raises(ValueError, match="dimensions must be positive"):
+        HashingEmbedder(0)
