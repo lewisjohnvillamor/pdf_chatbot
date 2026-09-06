@@ -16,6 +16,7 @@ import numpy as np
 from .config import Settings
 from .errors import EmbeddingError
 from .models import Usage
+from .providers import build_openai_client, describe_sdk_error
 
 logger = logging.getLogger(__name__)
 
@@ -70,16 +71,12 @@ class OpenAIEmbedder:
                 "EMBEDDING_PROVIDER to 'local' or 'none'."
             )
         try:
-            from openai import OpenAI
+            import openai
         except ImportError as exc:  # pragma: no cover - dependency is declared
             raise EmbeddingError("The 'openai' package is not installed.") from exc
 
-        self._client = OpenAI(
-            api_key=settings.openai_api_key or "not-needed",
-            base_url=settings.openai_base_url,
-            timeout=settings.request_timeout_s,
-            max_retries=settings.max_retries,
-        )
+        self._sdk = openai
+        self._client = build_openai_client(settings)
         self._settings = settings
         self.name = settings.embedding_model
         self.dimensions = self._DIMENSIONS.get(settings.embedding_model, 1536)
@@ -95,7 +92,17 @@ class OpenAIEmbedder:
             try:
                 response = self._client.embeddings.create(model=self.name, input=batch)
             except Exception as exc:
-                raise EmbeddingError(f"Embedding request failed: {exc}") from exc
+                # Same ladder the chat backends use, so an auth or rate-limit
+                # failure reads the same whichever call hit it first.
+                raise EmbeddingError(
+                    describe_sdk_error(
+                        self._sdk,
+                        exc,
+                        provider="OpenAI",
+                        model=self.name,
+                        key_env="OPENAI_API_KEY",
+                    )
+                ) from exc
             vectors.extend(item.embedding for item in response.data)
             tokens += getattr(response.usage, "total_tokens", 0) or 0
             calls += 1

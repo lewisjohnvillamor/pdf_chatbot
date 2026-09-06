@@ -19,6 +19,7 @@ from typing import Any, Protocol, runtime_checkable
 from .config import Settings
 from .errors import ProviderError
 from .models import Usage
+from .providers import build_openai_client, describe_sdk_error
 
 logger = logging.getLogger(__name__)
 
@@ -140,18 +141,15 @@ class AnthropicChat:
         return recorded
 
     def _translate(self, exc: Exception) -> ProviderError:
-        sdk = self._sdk
-        if isinstance(exc, sdk.AuthenticationError):
-            return ProviderError("Anthropic rejected the API key. Check ANTHROPIC_API_KEY.")
-        if isinstance(exc, sdk.RateLimitError):
-            return ProviderError("Rate limited by Anthropic. Wait a moment and try again.")
-        if isinstance(exc, sdk.NotFoundError):
-            return ProviderError(f"Model {self.name!r} is not available to this account.")
-        if isinstance(exc, sdk.APIConnectionError):
-            return ProviderError("Could not reach the Anthropic API. Check network access.")
-        if isinstance(exc, sdk.APIStatusError):
-            return ProviderError(f"Anthropic API error ({exc.status_code}): {exc.message}")
-        return ProviderError(f"Anthropic request failed: {exc}")
+        return ProviderError(
+            describe_sdk_error(
+                self._sdk,
+                exc,
+                provider="Anthropic",
+                model=self.name,
+                key_env="ANTHROPIC_API_KEY",
+            )
+        )
 
     def complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Completion:
         try:
@@ -202,13 +200,7 @@ class OpenAIChat:
                 "self-hosted OpenAI-compatible endpoint."
             )
         self._sdk = openai
-        self._client = openai.OpenAI(
-            # Local gateways accept any non-empty key.
-            api_key=settings.openai_api_key or "not-needed",
-            base_url=settings.openai_base_url,
-            timeout=settings.request_timeout_s,
-            max_retries=settings.max_retries,
-        )
+        self._client = build_openai_client(settings)
         self._settings = settings
         self.name = settings.chat_model
         self._last = Usage()
@@ -229,18 +221,11 @@ class OpenAIChat:
         return recorded
 
     def _translate(self, exc: Exception) -> ProviderError:
-        sdk = self._sdk
-        if isinstance(exc, sdk.AuthenticationError):
-            return ProviderError("OpenAI rejected the API key. Check OPENAI_API_KEY.")
-        if isinstance(exc, sdk.RateLimitError):
-            return ProviderError("Rate limited by OpenAI. Wait a moment and try again.")
-        if isinstance(exc, sdk.NotFoundError):
-            return ProviderError(f"Model {self.name!r} is not available to this account.")
-        if isinstance(exc, sdk.APIConnectionError):
-            return ProviderError("Could not reach the OpenAI API. Check network access.")
-        if isinstance(exc, sdk.APIStatusError):
-            return ProviderError(f"OpenAI API error ({exc.status_code}): {exc.message}")
-        return ProviderError(f"OpenAI request failed: {exc}")
+        return ProviderError(
+            describe_sdk_error(
+                self._sdk, exc, provider="OpenAI", model=self.name, key_env="OPENAI_API_KEY"
+            )
+        )
 
     def complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Completion:
         try:

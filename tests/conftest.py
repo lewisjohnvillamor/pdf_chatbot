@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
+from evals.hashing import HashingEmbedder
 from pdfchat.config import Settings
 from pdfchat.models import Chunk, Document, Page, Usage
 
@@ -93,42 +93,12 @@ class FakeChatModel:
         return self._usage
 
 
-class FakeEmbedder:
-    """Deterministic hashed bag-of-words embeddings.
-
-    Word-level rather than character-level: texts sharing vocabulary land close
-    together, so similarity in tests means what it means in production.
-    """
-
-    name = "fake-embedder"
-    dimensions = 256
-
-    def _vector(self, text: str) -> np.ndarray:
-        import hashlib
-
-        from pdfchat.lexical import tokenize
-
-        vector = np.zeros(self.dimensions, dtype=np.float32)
-        for token in tokenize(text):
-            digest = hashlib.blake2b(token.encode(), digest_size=4).digest()
-            vector[int.from_bytes(digest, "big") % self.dimensions] += 1.0
-        norm = np.linalg.norm(vector)
-        return vector / norm if norm else vector
-
-    def embed_documents(self, texts):
-        if not texts:
-            return np.zeros((0, self.dimensions), dtype=np.float32), Usage()
-        return np.vstack([self._vector(t) for t in texts]), Usage(embedding_tokens=len(texts))
-
-    def embed_query(self, text):
-        return self._vector(text).reshape(1, -1), Usage(embedding_tokens=1)
-
-
 @pytest.fixture()
 def fake_model() -> FakeChatModel:
     return FakeChatModel()
 
 
 @pytest.fixture()
-def fake_embedder() -> FakeEmbedder:
-    return FakeEmbedder()
+def fake_embedder() -> HashingEmbedder:
+    """The same embedder the eval harness uses, so tests and evals agree."""
+    return HashingEmbedder(dimensions=256, name="fake-embedder")
