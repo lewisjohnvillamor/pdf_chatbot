@@ -62,20 +62,37 @@ def format_sources(chunks: list[ScoredChunk]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+def build_sources_prefix(chunks: list[ScoredChunk]) -> str:
+    """The stable, cacheable head of a user turn: just the retrieved passages.
+
+    Kept separate from the question so it can carry a cache breakpoint. Every
+    call about the same passages - the answer, the grounding check, the
+    follow-ups, and each study tool - reuses this exact text, and prompt caching
+    is a prefix match, so anything volatile must come after it.
+    """
+    return "\n".join(
+        [
+            "Here are the excerpts from the learner's documents.\n",
+            "<sources>",
+            format_sources(chunks) or "(no sources retrieved)",
+            "</sources>",
+        ]
+    )
+
+
 def build_answer_prompt(
     question: str,
     chunks: list[ScoredChunk],
     *,
     level: str = "Intermediate",
     history: list[tuple[str, str]] | None = None,
-) -> str:
-    """Assemble the user-turn prompt: sources, then history, then the question."""
-    parts = [
-        "Here are the excerpts from the learner's documents.\n",
-        "<sources>",
-        format_sources(chunks) or "(no sources retrieved)",
-        "</sources>\n",
-    ]
+) -> tuple[str, str]:
+    """Return ``(cacheable_prefix, volatile_suffix)`` for the user turn.
+
+    The caller sends them as two content blocks with a cache breakpoint between,
+    so the passages are billed once per session rather than once per call.
+    """
+    parts: list[str] = []
     if history:
         recent = "\n".join(f"Learner: {q}\nAssistant: {a}" for q, a in history[-3:])
         parts.append(f"<recent_conversation>\n{recent}\n</recent_conversation>\n")
@@ -84,18 +101,14 @@ def build_answer_prompt(
     parts.append(
         "\nAnswer the question using only the sources above, citing them with [S1]-style markers."
     )
-    return "\n".join(parts)
+    return build_sources_prefix(chunks), "\n".join(parts)
 
 
 GROUNDING_SYSTEM = """You are a strict fact-checker. You compare a draft answer \
 against the source excerpts it claims to be based on, and you report only what the \
 sources actually support. You never use outside knowledge."""
 
-GROUNDING_PROMPT = """<sources>
-{sources}
-</sources>
-
-<draft_answer>
+GROUNDING_PROMPT = """<draft_answer>
 {answer}
 </draft_answer>
 
@@ -112,11 +125,7 @@ Use "ungrounded" when the central claim is unsupported. Ignore hedging language,
 restated questions and formatting; judge only factual content."""
 
 
-SUMMARY_PROMPT = """<sources>
-{sources}
-</sources>
-
-Write a study summary of the material above for a {level} learner.
+SUMMARY_PROMPT = """Write a study summary of the material above for a {level} learner.
 
 Structure it as:
 - **In one sentence** — what this material is about.
@@ -127,11 +136,7 @@ tested or reused.
 Use only the sources. Cite every bullet."""
 
 
-GLOSSARY_PROMPT = """<sources>
-{sources}
-</sources>
-
-Extract the key terms a learner must understand to follow this material.
+GLOSSARY_PROMPT = """Extract the key terms a learner must understand to follow this material.
 
 Reply with a single JSON object and nothing else:
 {{"terms": [{{"term": "...", "definition": "...", "source": "S1"}}]}}
@@ -142,11 +147,7 @@ prefer terms the material itself defines or relies on heavily. If the material \
 defines fewer than 5 terms, return only the ones it genuinely defines."""
 
 
-FLASHCARD_PROMPT = """<sources>
-{sources}
-</sources>
-
-Write {count} flashcards that test understanding of this material for a {level} \
+FLASHCARD_PROMPT = """Write {count} flashcards that test understanding of this material for a {level} \
 learner.
 
 Reply with a single JSON object and nothing else:
@@ -158,11 +159,7 @@ supporting excerpt. Test understanding and application, not trivia — avoid \
 questions answerable by matching a single word. Do not duplicate cards."""
 
 
-QUIZ_PROMPT = """<sources>
-{sources}
-</sources>
-
-Write {count} multiple-choice questions on this material for a {level} learner.
+QUIZ_PROMPT = """Write {count} multiple-choice questions on this material for a {level} learner.
 
 Reply with a single JSON object and nothing else:
 {{"questions": [{{"question": "...", "options": ["A", "B", "C", "D"],
@@ -175,11 +172,7 @@ correct option is right and cites its excerpt. Vary which index is correct acros
 questions. Every question must be answerable from the sources alone."""
 
 
-FOLLOW_UP_PROMPT = """<sources>
-{sources}
-</sources>
-
-<question>{question}</question>
+FOLLOW_UP_PROMPT = """<question>{question}</question>
 <answer>{answer}</answer>
 
 Suggest 3 follow-up questions the learner could usefully ask next about this \

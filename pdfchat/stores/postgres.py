@@ -236,17 +236,23 @@ class PostgresVectorStore:
     ) -> list[tuple[Chunk, float]]:
         if limit <= 0:
             return []
+        # Named parameters so the query vector crosses the wire once. A 1536-d
+        # literal is ~18 KB; sending it positionally for both the SELECT and the
+        # ORDER BY doubled that on every single query.
         sql = f"""
-            SELECT {self._SELECT_COLUMNS}, 1 - (embedding <=> %s::vector) AS similarity
+            SELECT {self._SELECT_COLUMNS}, 1 - (embedding <=> %(vec)s::vector) AS similarity
             FROM {self._table}
-            WHERE collection = %s AND embedding IS NOT NULL
+            WHERE collection = %(collection)s AND embedding IS NOT NULL
         """
-        params: list[Any] = [_to_pgvector(query_vector), collection]
+        params: dict[str, Any] = {
+            "vec": _to_pgvector(query_vector),
+            "collection": collection,
+            "limit": limit,
+        }
         if doc_ids:
-            sql += " AND doc_id = ANY(%s)"
-            params.append(list(doc_ids))
-        sql += " ORDER BY embedding <=> %s::vector LIMIT %s"
-        params.extend([_to_pgvector(query_vector), limit])
+            sql += " AND doc_id = ANY(%(doc_ids)s)"
+            params["doc_ids"] = list(doc_ids)
+        sql += " ORDER BY embedding <=> %(vec)s::vector LIMIT %(limit)s"
         try:
             with self._pool.connection() as conn:
                 rows = conn.execute(sql, params).fetchall()

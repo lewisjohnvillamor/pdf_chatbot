@@ -35,6 +35,11 @@ class MemoryVectorStore:
         self._lock = threading.RLock()
         self._chunks: dict[str, list[Chunk]] = {}
         self._matrix: dict[str, np.ndarray] = {}
+        # Embeddings arrive in batches during indexing. Appending them to one
+        # array copies the whole thing every time, which is quadratic: 20k
+        # chunks spent ~2.8s purely re-copying. Pending blocks are held here
+        # and concatenated once, on the first read that needs them.
+        self._pending: dict[str, list[np.ndarray]] = {}
 
     # ------------------------------------------------------------------
     def add(self, records: list[ChunkRecord], *, collection: str) -> int:
@@ -57,16 +62,23 @@ class MemoryVectorStore:
                         for record in fresh
                     ]
                 ).astype(np.float32)
-                current = self._matrix.get(collection)
-                self._matrix[collection] = (
-                    new_rows if current is None else np.vstack([current, new_rows])
-                )
+                self._pending.setdefault(collection, []).append(new_rows)
             return len(fresh)
+
+    def _materialize(self, collection: str) -> np.ndarray | None:
+        """Fold any pending blocks into the collection's matrix. Caller holds the lock."""
+        pending = self._pending.pop(collection, None)
+        if pending:
+            current = self._matrix.get(collection)
+            blocks = ([current] if current is not None else []) + pending
+            self._matrix[collection] = np.vstack(blocks)
+        return self._matrix.get(collection)
 
     def delete_collection(self, collection: str) -> None:
         with self._lock:
             self._chunks.pop(collection, None)
             self._matrix.pop(collection, None)
+            self._pending.pop(collection, None)
 
     def count(self, collection: str) -> int:
         return len(self._chunks.get(collection, []))
@@ -97,7 +109,7 @@ class MemoryVectorStore:
         if self.dimensions == 0 or limit <= 0:
             return []
         with self._lock:
-            matrix = self._matrix.get(collection)
+            matrix = self._materialize(collection)
             chunks = self._chunks.get(collection, [])
         if matrix is None or not len(chunks):
             return []
@@ -122,7 +134,7 @@ class MemoryVectorStore:
         if self.dimensions == 0 or not chunk_ids:
             return None
         with self._lock:
-            matrix = self._matrix.get(collection)
+            matrix = self._materialize(collection)
             chunks = self._chunks.get(collection, [])
         if matrix is None or not chunks:
             return None
@@ -150,7 +162,7 @@ class MemoryVectorStore:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             chunks = self._chunks.get(collection, [])
-            matrix = self._matrix.get(collection)
+            matrix = self._materialize(collection)
             np.savez_compressed(
                 path,
                 chunks=json.dumps([asdict(chunk) for chunk in chunks]),

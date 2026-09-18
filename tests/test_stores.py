@@ -133,3 +133,91 @@ def test_postgres_settings_reject_a_non_identifier_table():
             embedding_provider="openai",
             pg_table="chunks; DROP TABLE users",
         ).validated()
+
+
+# --- batched growth --------------------------------------------------------
+def test_results_are_identical_across_many_small_adds(fake_embedder):
+    """Deferring concatenation must not change what search returns.
+
+    Embeddings are appended in batches during indexing; they are now buffered
+    and folded in once. If that fold were wrong - wrong order, a dropped block -
+    every row would still be present but bound to the wrong chunk.
+    """
+    texts = [f"passage number {i} about topic {i % 7}" for i in range(50)]
+    vectors, _ = fake_embedder.embed_documents(texts)
+
+    one_shot = MemoryVectorStore(dimensions=fake_embedder.dimensions)
+    one_shot.add(
+        [
+            ChunkRecord(chunk=make_chunk(f"d:{i:05d}", t), embedding=vectors[i])
+            for i, t in enumerate(texts)
+        ],
+        collection="c",
+    )
+
+    batched = MemoryVectorStore(dimensions=fake_embedder.dimensions)
+    for start in range(0, len(texts), 7):  # deliberately uneven batches
+        batched.add(
+            [
+                ChunkRecord(chunk=make_chunk(f"d:{i:05d}", texts[i]), embedding=vectors[i])
+                for i in range(start, min(start + 7, len(texts)))
+            ],
+            collection="c",
+        )
+
+    query, _ = fake_embedder.embed_query("passage number 33 about topic 5")
+    a = [c.chunk_id for c, _ in one_shot.search_dense(query[0], collection="c", limit=5)]
+    b = [c.chunk_id for c, _ in batched.search_dense(query[0], collection="c", limit=5)]
+    assert a == b
+
+
+def test_adds_after_a_search_are_still_visible(fake_embedder):
+    """Searching materialises the buffer; later adds must refill it correctly."""
+    store = MemoryVectorStore(dimensions=fake_embedder.dimensions)
+    first, _ = fake_embedder.embed_documents(["alpha content"])
+    store.add(
+        [ChunkRecord(chunk=make_chunk("d:00000", "alpha content"), embedding=first[0])],
+        collection="c",
+    )
+    query, _ = fake_embedder.embed_query("alpha content")
+    assert len(store.search_dense(query[0], collection="c", limit=5)) == 1
+
+    later, _ = fake_embedder.embed_documents(["omega content"])
+    store.add(
+        [ChunkRecord(chunk=make_chunk("d:00001", "omega content"), embedding=later[0])],
+        collection="c",
+    )
+    omega, _ = fake_embedder.embed_query("omega content")
+    hits = store.search_dense(omega[0], collection="c", limit=5)
+    assert len(hits) == 2
+    assert hits[0][0].text == "omega content"
+
+
+def test_cache_save_includes_unmaterialised_rows(tmp_path, fake_embedder):
+    """Saving straight after indexing must not drop the buffered embeddings."""
+    store = MemoryVectorStore(dimensions=fake_embedder.dimensions, cache_dir=tmp_path)
+    texts = ["first passage", "second passage"]
+    vectors, _ = fake_embedder.embed_documents(texts)
+    for i, t in enumerate(texts):  # two separate adds, no search in between
+        store.add(
+            [ChunkRecord(chunk=make_chunk(f"d:{i:05d}", t), embedding=vectors[i])],
+            collection="c",
+        )
+    assert store.save("c", "fp")
+
+    restored = MemoryVectorStore(dimensions=fake_embedder.dimensions, cache_dir=tmp_path)
+    assert restored.load("c", "fp")
+    query, _ = fake_embedder.embed_query("second passage")
+    assert restored.search_dense(query[0], collection="c", limit=1)[0][0].text == "second passage"
+
+
+def test_delete_clears_buffered_rows(fake_embedder):
+    store = MemoryVectorStore(dimensions=fake_embedder.dimensions)
+    vectors, _ = fake_embedder.embed_documents(["content"])
+    store.add(
+        [ChunkRecord(chunk=make_chunk("d:00000", "content"), embedding=vectors[0])],
+        collection="c",
+    )
+    store.delete_collection("c")
+    query, _ = fake_embedder.embed_query("content")
+    assert store.search_dense(query[0], collection="c", limit=5) == []

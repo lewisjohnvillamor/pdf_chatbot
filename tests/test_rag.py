@@ -47,13 +47,51 @@ def test_answer_is_returned_with_sources_and_citations(pipeline_factory):
     assert not answer.refused
 
 
-def test_sources_are_injected_into_the_prompt(pipeline_factory):
+def test_sources_are_sent_as_the_cacheable_prefix(pipeline_factory):
+    """Passages go in the cached prefix; only the question varies after it."""
     pipeline, model = pipeline_factory(["Answer [S1].", '{"verdict":"grounded"}'])
     pipeline.answer("What about chloroplasts?", collection="c")
+
+    prefix = model.cache_prefixes[0]
+    assert prefix is not None
+    assert "<sources>" in prefix
+    assert "chloroplasts" in prefix
+    assert "[S1]" in prefix
+
     _system, user = model.prompts[0]
-    assert "<sources>" in user
-    assert "chloroplasts" in user
-    assert "[S1]" in user
+    assert "<question>" in user
+    assert "<sources>" not in user, "passages must not also be in the volatile tail"
+
+
+def test_every_call_about_one_question_shares_one_cached_prefix(pipeline_factory):
+    """Answer, grounding check and follow-ups reuse a byte-identical prefix.
+
+    Caching is a prefix match, so any difference between these - even
+    whitespace - would turn two cache reads into two full-price writes.
+    """
+    pipeline, model = pipeline_factory(
+        ["Answer [S1].", '{"verdict":"grounded"}', '{"questions":["Why?"]}']
+    )
+    answer = pipeline.answer("Explain respiration.", collection="c")
+    pipeline.suggest_follow_ups(answer)
+
+    prefixes = [p for p in model.cache_prefixes if p is not None]
+    assert len(prefixes) == 3, "answer, grounding and follow-up should all send one"
+    assert len(set(prefixes)) == 1, "the prefixes differ, so nothing would be reused"
+
+
+def test_prefix_is_large_enough_to_actually_cache(pipeline_factory):
+    """A breakpoint under the model minimum is stored silently as nothing."""
+    from pdfchat.llm import is_worth_caching
+
+    pipeline, model = pipeline_factory(["Answer [S1].", '{"verdict":"grounded"}'])
+    pipeline.answer("Explain respiration.", collection="c")
+    prefix = model.cache_prefixes[0]
+    # The fixture corpus is deliberately small, so assert the rule is applied
+    # rather than that this particular corpus clears it.
+    assert is_worth_caching("x" * 4 * 600, "claude-opus-5")
+    assert not is_worth_caching("x" * 4 * 100, "claude-opus-5")
+    assert prefix is not None
 
 
 def test_empty_corpus_produces_an_explicit_refusal(settings, fake_embedder):

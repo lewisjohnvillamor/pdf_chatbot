@@ -7,7 +7,7 @@
 [![CI](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-232%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-238%20passing-brightgreen.svg)](tests/)
 [![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support-yellow.svg)](https://buymeacoffee.com/lewisjohnvil)
 
 </div>
@@ -144,7 +144,7 @@ Useful controls:
 | --- | --- |
 | **Explanation level** | Beginner defines every term; Expert assumes the field |
 | **Search within** | Restrict retrieval to specific documents |
-| **Session cost & config** | Live token and USD totals, and the active configuration |
+| **Session cost & config** | Live token and USD totals, cache hits, and the active configuration |
 
 ### 3. Study
 
@@ -297,7 +297,7 @@ make eval       # retrieval metrics
 make help       # all targets
 ```
 
-232 tests. The suite generates real PDFs with reportlab and pushes them through
+238 tests. The suite generates real PDFs with reportlab and pushes them through
 ingest → clean → chunk → embed → index → retrieve → cite. Only the chat provider
 is faked; **no test makes a network call.**
 

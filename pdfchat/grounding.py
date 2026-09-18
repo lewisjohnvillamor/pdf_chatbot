@@ -18,7 +18,7 @@ import logging
 from .citations import has_any_citation
 from .llm import ChatModel, extract_json
 from .models import GroundingVerdict, ScoredChunk, Usage
-from .prompts import GROUNDING_PROMPT, GROUNDING_SYSTEM, format_sources
+from .prompts import GROUNDING_PROMPT, GROUNDING_SYSTEM, build_sources_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +49,14 @@ def verify(
             Usage(),
         )
 
-    prompt = GROUNDING_PROMPT.format(sources=format_sources(sources), answer=answer)
+    prompt = GROUNDING_PROMPT.format(answer=answer)
     try:
-        completion = model.complete(GROUNDING_SYSTEM, prompt, max_tokens=_MAX_TOKENS)
+        completion = model.complete(
+            GROUNDING_SYSTEM,
+            prompt,
+            max_tokens=_MAX_TOKENS,
+            cache_prefix=build_sources_prefix(sources),
+        )
         payload = extract_json(completion.text)
     except Exception:
         # A failed check must never block the answer the learner already has.

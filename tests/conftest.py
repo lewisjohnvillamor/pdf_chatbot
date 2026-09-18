@@ -73,19 +73,24 @@ class FakeChatModel:
     def __init__(self, responses: list[str] | None = None):
         self.responses = list(responses or [])
         self.prompts: list[tuple[str, str]] = []
+        #: The cacheable prefix each call was given, so tests can assert that
+        #: repeated calls reuse a byte-identical one.
+        self.cache_prefixes: list[str | None] = []
         self._usage = Usage(input_tokens=100, output_tokens=50, cost_usd=0.001, calls=1)
 
     def _next(self) -> str:
         return self.responses.pop(0) if self.responses else "No response queued."
 
-    def complete(self, system, user, *, max_tokens=None):
+    def complete(self, system, user, *, max_tokens=None, cache_prefix=None):
         from pdfchat.llm import Completion
 
         self.prompts.append((system, user))
+        self.cache_prefixes.append(cache_prefix)
         return Completion(text=self._next(), usage=self._usage, stop_reason="end_turn")
 
-    def stream(self, system, user, *, max_tokens=None):
+    def stream(self, system, user, *, max_tokens=None, cache_prefix=None):
         self.prompts.append((system, user))
+        self.cache_prefixes.append(cache_prefix)
         for word in self._next().split(" "):
             yield word + " "
 
