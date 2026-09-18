@@ -141,8 +141,44 @@ class HybridRetriever:
         self._bm25_signature = None
 
     # ------------------------------------------------------------------
+    def retrieve_many(
+        self, questions: list[str], *, collection: str, doc_ids: list[str] | None = None
+    ) -> list[RetrievalResult]:
+        """Retrieve for several queries, embedding them in one request.
+
+        The study tools probe the corpus with a handful of survey queries. Run
+        through :meth:`retrieve` that is one embedding round trip each, all
+        sequential, before any generation starts. Batching collapses them into
+        one call; the searches themselves are local and cheap.
+        """
+        questions = [q for q in questions if q.strip()]
+        if not questions:
+            return []
+        if self._embedder.dimensions == 0 or len(questions) == 1:
+            return [self.retrieve(q, collection=collection, doc_ids=doc_ids) for q in questions]
+
+        vectors, usage = self._embedder.embed_documents(questions)
+        results = [
+            self.retrieve(
+                question,
+                collection=collection,
+                doc_ids=doc_ids,
+                query_vector=vectors[index],
+            )
+            for index, question in enumerate(questions)
+        ]
+        # The batched embedding cost belongs to the first result, not to none.
+        if results:
+            results[0].usage = results[0].usage.add(usage)
+        return results
+
     def retrieve(
-        self, question: str, *, collection: str, doc_ids: list[str] | None = None
+        self,
+        question: str,
+        *,
+        collection: str,
+        doc_ids: list[str] | None = None,
+        query_vector: np.ndarray | None = None,
     ) -> RetrievalResult:
         """Return the best passages for ``question``, best first."""
         settings = self._settings
@@ -172,11 +208,14 @@ class HybridRetriever:
 
         # --- dense -----------------------------------------------------
         dense_ids: list[str] = []
-        query_vector: np.ndarray | None = None
-        if self._embedder.dimensions > 0:
+        if self._embedder.dimensions > 0 and query_vector is None:
+            # Skipped when the caller already embedded this query in a batch.
             vectors, embed_usage = self._embedder.embed_query(question)
             usage = usage.add(embed_usage)
             query_vector = vectors[0]
+        elif self._embedder.dimensions == 0:
+            query_vector = None
+        if query_vector is not None:
             hits = self._store.search_dense(
                 query_vector, collection=collection, limit=settings.candidate_k, doc_ids=doc_ids
             )

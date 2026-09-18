@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 
 from .citations import extract_citations, find_invalid_markers, strip_invalid_markers
 from .config import Settings
 from .errors import ProviderError
 from .grounding import verify
 from .llm import ChatModel, extract_json
-from .models import Answer, Usage
+from .models import Answer, ScoredChunk, Usage
 from .prompts import (
     FOLLOW_UP_PROMPT,
     SYSTEM_PROMPT,
@@ -57,8 +58,16 @@ class RagPipeline:
         level: str = "Intermediate",
         history: list[tuple[str, str]] | None = None,
         on_token: Callable[[str], None] | None = None,
+        with_follow_ups: bool = False,
     ) -> Answer:
-        """Answer ``question``, streaming tokens to ``on_token`` when provided."""
+        """Answer ``question``, streaming tokens to ``on_token`` when provided.
+
+        With ``with_follow_ups``, the grounding check and the follow-up
+        suggestions run concurrently. Both depend only on the finished answer
+        and the same passages, never on each other, so running them in sequence
+        made the reader wait out two round trips instead of one. They are
+        network-bound, so threads are the right tool.
+        """
         question = question.strip()
         if not question:
             return Answer(question=question, text="Ask a question to get started.", refused=True)
@@ -93,9 +102,23 @@ class RagPipeline:
             text = strip_invalid_markers(text, len(retrieval.chunks))
 
         verdict, note, verify_usage = ("unchecked", "", Usage())
-        if self._settings.enable_self_check:
+        follow_ups: list[str] = []
+        refused = text.strip().lower().startswith("the documents don't cover this")
+        wants_follow_ups = with_follow_ups and not refused and bool(retrieval.chunks)
+
+        if self._settings.enable_self_check and wants_follow_ups:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                checking = pool.submit(verify, text, retrieval.chunks, self._model)
+                suggesting = pool.submit(self._follow_ups_for, question, text, retrieval.chunks)
+                verdict, note, verify_usage = checking.result()
+                follow_ups, follow_up_usage = suggesting.result()
+            usage = usage.add(verify_usage).add(follow_up_usage)
+        elif self._settings.enable_self_check:
             verdict, note, verify_usage = verify(text, retrieval.chunks, self._model)
             usage = usage.add(verify_usage)
+        elif wants_follow_ups:
+            follow_ups, follow_up_usage = self._follow_ups_for(question, text, retrieval.chunks)
+            usage = usage.add(follow_up_usage)
 
         citations = extract_citations(text, retrieval.chunks)
         answer = Answer(
@@ -106,7 +129,8 @@ class RagPipeline:
             usage=usage,
             verdict=verdict,
             verdict_note=note,
-            refused=text.strip().lower().startswith("the documents don't cover this"),
+            refused=refused,
+            follow_ups=follow_ups,
         )
         logger.info(
             "answer_generated",
@@ -137,26 +161,34 @@ class RagPipeline:
         return "".join(pieces)
 
     # ------------------------------------------------------------------
-    def suggest_follow_ups(self, answer: Answer, *, limit: int = 3) -> list[str]:
-        """Propose next questions that the same sources can answer."""
-        if answer.refused or not answer.sources:
-            return []
-        # Same system prompt and same passages as the answer call, so this
-        # reads the entry that call just wrote.
-        prompt = FOLLOW_UP_PROMPT.format(
-            question=answer.question,
-            answer=answer.text[:2000],
-        )
+    def _follow_ups_for(
+        self, question: str, answer_text: str, sources: list[ScoredChunk], *, limit: int = 3
+    ) -> tuple[list[str], Usage]:
+        """Follow-up suggestions plus their cost, for concurrent use."""
+        prompt = FOLLOW_UP_PROMPT.format(question=question, answer=answer_text[:2000])
         try:
             completion = self._model.complete(
                 SYSTEM_PROMPT,
                 prompt,
                 max_tokens=500,
-                cache_prefix=build_sources_prefix(answer.sources),
+                cache_prefix=build_sources_prefix(sources),
             )
-            payload = extract_json(completion.text)
         except ProviderError:
             logger.info("follow_up_generation_failed", exc_info=True)
-            return []
+            return [], Usage()
+        try:
+            payload = extract_json(completion.text)
+        except ProviderError:
+            logger.info("follow_up_parse_failed", exc_info=True)
+            return [], completion.usage
         questions = payload.get("questions") or []
-        return [str(q).strip() for q in questions if str(q).strip()][:limit]
+        return [str(q).strip() for q in questions if str(q).strip()][:limit], completion.usage
+
+    def suggest_follow_ups(self, answer: Answer, *, limit: int = 3) -> list[str]:
+        """Propose next questions that the same sources can answer."""
+        if answer.refused or not answer.sources:
+            return []
+        suggestions, _usage = self._follow_ups_for(
+            answer.question, answer.text, answer.sources, limit=limit
+        )
+        return suggestions

@@ -179,3 +179,70 @@ def test_follow_ups_are_skipped_for_refusals(pipeline_factory):
     pipeline, _ = pipeline_factory(["The documents don't cover this."])
     answer = pipeline.answer("Unrelated question.", collection="c")
     assert pipeline.suggest_follow_ups(answer) == []
+
+
+# --- concurrent verification + follow-ups ---------------------------------
+def test_follow_ups_are_produced_in_the_same_call(pipeline_factory):
+    pipeline, _ = pipeline_factory(
+        ["Answer [S1].", '{"verdict":"grounded"}', '{"questions":["Why?","How?"]}']
+    )
+    answer = pipeline.answer("Explain.", collection="c", with_follow_ups=True)
+    assert answer.follow_ups
+    assert answer.verdict == "grounded"
+
+
+def test_grounding_and_follow_ups_actually_overlap(settings, fake_embedder):
+    """Both are network-bound and independent, so they must not run in sequence."""
+    import threading
+    import time
+
+    from pdfchat.stores.base import ChunkRecord
+    from pdfchat.stores.memory import MemoryVectorStore
+    from tests.conftest import FakeChatModel, make_chunk
+
+    class SlowModel(FakeChatModel):
+        """Each call sleeps; overlapping calls therefore take ~1 delay, not 2."""
+
+        DELAY = 0.25
+
+        def __init__(self, responses):
+            super().__init__(responses)
+            self.concurrent = 0
+            self.max_concurrent = 0
+            self._lock = threading.Lock()
+
+        def complete(self, system, user, *, max_tokens=None, cache_prefix=None):
+            with self._lock:
+                self.concurrent += 1
+                self.max_concurrent = max(self.max_concurrent, self.concurrent)
+            time.sleep(self.DELAY)
+            with self._lock:
+                self.concurrent -= 1
+            return super().complete(system, user, max_tokens=max_tokens, cache_prefix=cache_prefix)
+
+    store = MemoryVectorStore(dimensions=fake_embedder.dimensions)
+    vectors, _ = fake_embedder.embed_documents(TEXTS)
+    store.add(
+        [
+            ChunkRecord(chunk=make_chunk(f"doc1:{i:05d}", t, page=i + 1), embedding=vectors[i])
+            for i, t in enumerate(TEXTS)
+        ],
+        collection="c",
+    )
+    model = SlowModel(["Answer [S1].", '{"verdict":"grounded"}', '{"questions":["Why?"]}'])
+    pipeline = RagPipeline(HybridRetriever(store, fake_embedder, settings), model, settings)
+
+    started = time.perf_counter()
+    pipeline.answer("Explain glucose.", collection="c", with_follow_ups=True)
+    elapsed = time.perf_counter() - started
+
+    assert model.max_concurrent == 2, "the two post-answer calls ran one after the other"
+    # generation + one overlapped pair, not generation + two sequential calls.
+    assert elapsed < SlowModel.DELAY * 3, f"took {elapsed:.2f}s, suggesting no overlap"
+
+
+def test_refusals_skip_follow_ups_entirely(pipeline_factory):
+    pipeline, model = pipeline_factory(["The documents don't cover this."])
+    answer = pipeline.answer("Unrelated.", collection="c", with_follow_ups=True)
+    assert answer.follow_ups == []
+    assert len(model.prompts) == 1, "a refusal must not pay for follow-ups"

@@ -68,8 +68,8 @@ def gather_context(
     queries = [topic] if topic.strip() else _SURVEY_QUERIES
     merged: dict[str, ScoredChunk] = {}
     usage = Usage()
-    for query in queries:
-        result = retriever.retrieve(query, collection=collection, doc_ids=doc_ids)
+    # One embedding request for all probes rather than one per probe.
+    for result in retriever.retrieve_many(queries, collection=collection, doc_ids=doc_ids):
         usage = usage.add(result.usage)
         for scored in result.chunks:
             existing = merged.get(scored.chunk.chunk_id)

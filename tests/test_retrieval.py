@@ -195,3 +195,58 @@ def test_mmr_handles_uniform_relevance_without_dividing_by_zero():
         query, candidates, k=2, lambda_mult=0.5, relevance=np.array([0.5, 0.5])
     )
     assert sorted(order) == [0, 1]
+
+
+def test_retrieve_many_embeds_every_query_in_one_request(settings, fake_embedder):
+    """The study tools probe with several queries; that must be one round trip."""
+
+    class CountingEmbedder:
+        name = "counting"
+
+        def __init__(self, inner):
+            self._inner = inner
+            self.dimensions = inner.dimensions
+            self.document_calls = 0
+            self.query_calls = 0
+
+        def embed_documents(self, texts):
+            self.document_calls += 1
+            return self._inner.embed_documents(texts)
+
+        def embed_query(self, text):
+            self.query_calls += 1
+            return self._inner.embed_query(text)
+
+    counting = CountingEmbedder(fake_embedder)
+    store = build_store(fake_embedder)
+    retriever = HybridRetriever(store, counting, settings)
+
+    results = retriever.retrieve_many(
+        ["glucose energy", "enzymes catalysts", "membrane transport"], collection="c"
+    )
+    assert len(results) == 3
+    assert counting.document_calls == 1, "queries were not batched"
+    assert counting.query_calls == 0, "a per-query embedding call slipped through"
+
+
+def test_retrieve_many_matches_retrieve_one_by_one(settings, fake_embedder):
+    store = build_store(fake_embedder)
+    retriever = HybridRetriever(store, fake_embedder, settings)
+    queries = ["glucose energy", "enzymes catalysts"]
+    batched = retriever.retrieve_many(queries, collection="c")
+    single = [retriever.retrieve(q, collection="c") for q in queries]
+    for b, s in zip(batched, single, strict=True):
+        assert [c.chunk.chunk_id for c in b.chunks] == [c.chunk.chunk_id for c in s.chunks]
+
+
+def test_retrieve_many_handles_empty_and_blank_queries(settings, fake_embedder):
+    retriever = HybridRetriever(build_store(fake_embedder), fake_embedder, settings)
+    assert retriever.retrieve_many([], collection="c") == []
+    assert retriever.retrieve_many(["   ", ""], collection="c") == []
+
+
+def test_retrieve_many_reports_the_embedding_cost_once(settings, fake_embedder):
+    retriever = HybridRetriever(build_store(fake_embedder), fake_embedder, settings)
+    results = retriever.retrieve_many(["glucose", "enzymes", "membrane"], collection="c")
+    total = sum(r.usage.embedding_tokens for r in results)
+    assert total == 3, "the batched embedding cost must be counted, and only once"

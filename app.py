@@ -349,6 +349,9 @@ def render_chat(service: ChatService) -> None:
                     level=st.session_state.level,
                     history=history,
                     on_token=on_token,
+                    # Asked for here so the grounding check and the follow-ups
+                    # run concurrently rather than one after the other.
+                    with_follow_ups=True,
                 )
         except PdfChatError as exc:
             placeholder.empty()
@@ -361,8 +364,6 @@ def render_chat(service: ChatService) -> None:
             return
 
         placeholder.markdown(answer.text)
-        if not answer.refused:
-            answer.follow_ups = service.pipeline.suggest_follow_ups(answer)
         render_answer_extras(answer)
 
     st.session_state.answers.append(answer)
