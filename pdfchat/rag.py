@@ -17,7 +17,12 @@ from .errors import ProviderError
 from .grounding import verify
 from .llm import ChatModel, extract_json
 from .models import Answer, Usage
-from .prompts import FOLLOW_UP_PROMPT, SYSTEM_PROMPT, build_answer_prompt, format_sources
+from .prompts import (
+    FOLLOW_UP_PROMPT,
+    SYSTEM_PROMPT,
+    build_answer_prompt,
+    build_sources_prefix,
+)
 from .retrieval import HybridRetriever
 
 logger = logging.getLogger(__name__)
@@ -72,8 +77,13 @@ class RagPipeline:
                 verdict_note="No source material matched the question.",
             )
 
-        prompt = build_answer_prompt(question, retrieval.chunks, level=level, history=history)
-        text = self._generate(prompt, on_token)
+        # The passages are the bulk of every request and are reused by the
+        # grounding check and the follow-up call, so they are sent as a
+        # cacheable prefix rather than re-billed three times per question.
+        sources_prefix, prompt = build_answer_prompt(
+            question, retrieval.chunks, level=level, history=history
+        )
+        text = self._generate(prompt, on_token, cache_prefix=sources_prefix)
         usage = usage.add(self._model.last_usage())
 
         # A marker pointing at a source that was never supplied is a fabrication.
@@ -110,12 +120,18 @@ class RagPipeline:
         )
         return answer
 
-    def _generate(self, prompt: str, on_token: Callable[[str], None] | None) -> str:
+    def _generate(
+        self,
+        prompt: str,
+        on_token: Callable[[str], None] | None,
+        *,
+        cache_prefix: str | None = None,
+    ) -> str:
         """Run generation, streaming when both the config and caller allow it."""
         if on_token is None or not self._settings.enable_streaming:
-            return self._model.complete(SYSTEM_PROMPT, prompt).text
+            return self._model.complete(SYSTEM_PROMPT, prompt, cache_prefix=cache_prefix).text
         pieces: list[str] = []
-        for piece in self._model.stream(SYSTEM_PROMPT, prompt):
+        for piece in self._model.stream(SYSTEM_PROMPT, prompt, cache_prefix=cache_prefix):
             pieces.append(piece)
             on_token(piece)
         return "".join(pieces)
@@ -125,13 +141,19 @@ class RagPipeline:
         """Propose next questions that the same sources can answer."""
         if answer.refused or not answer.sources:
             return []
+        # Same system prompt and same passages as the answer call, so this
+        # reads the entry that call just wrote.
         prompt = FOLLOW_UP_PROMPT.format(
-            sources=format_sources(answer.sources),
             question=answer.question,
             answer=answer.text[:2000],
         )
         try:
-            completion = self._model.complete(SYSTEM_PROMPT, prompt, max_tokens=500)
+            completion = self._model.complete(
+                SYSTEM_PROMPT,
+                prompt,
+                max_tokens=500,
+                cache_prefix=build_sources_prefix(answer.sources),
+            )
             payload = extract_json(completion.text)
         except ProviderError:
             logger.info("follow_up_generation_failed", exc_info=True)

@@ -22,7 +22,7 @@ from .prompts import (
     QUIZ_PROMPT,
     SUMMARY_PROMPT,
     SYSTEM_PROMPT,
-    format_sources,
+    build_sources_prefix,
 )
 from .retrieval import HybridRetriever
 
@@ -81,10 +81,24 @@ def gather_context(
 
 
 def _generate(
-    model: ChatModel, prompt: str, settings: Settings, *, max_tokens: int | None = None
+    model: ChatModel,
+    prompt: str,
+    settings: Settings,
+    sources: list[ScoredChunk],
+    *,
+    max_tokens: int | None = None,
 ) -> tuple[dict, Usage]:
+    """Run a study-tool call with the passages as a cacheable prefix.
+
+    The four tools run over the same gathered passages with different
+    instructions, so after the first call the passages are cache reads.
+    """
     return complete_json(
-        model, SYSTEM_PROMPT, prompt, max_tokens=max_tokens or settings.max_output_tokens
+        model,
+        SYSTEM_PROMPT,
+        prompt,
+        max_tokens=max_tokens or settings.max_output_tokens,
+        cache_prefix=build_sources_prefix(sources),
     )
 
 
@@ -94,8 +108,13 @@ def make_summary(
     """Produce a cited study summary of the supplied passages."""
     if not sources:
         return "", Usage()
-    prompt = SUMMARY_PROMPT.format(sources=format_sources(sources), level=level.lower())
-    completion = model.complete(SYSTEM_PROMPT, prompt, max_tokens=settings.max_output_tokens)
+    prompt = SUMMARY_PROMPT.format(level=level.lower())
+    completion = model.complete(
+        SYSTEM_PROMPT,
+        prompt,
+        max_tokens=settings.max_output_tokens,
+        cache_prefix=build_sources_prefix(sources),
+    )
     return completion.text, completion.usage
 
 
@@ -106,8 +125,8 @@ def make_glossary(
     if not sources:
         return [], Usage()
     count = max(1, min(count, MAX_ITEMS))
-    prompt = GLOSSARY_PROMPT.format(sources=format_sources(sources), count=count)
-    payload, usage = _generate(model, prompt, settings)
+    prompt = GLOSSARY_PROMPT.format(count=count)
+    payload, usage = _generate(model, prompt, settings, sources)
     terms: list[GlossaryTerm] = []
     for item in payload.get("terms", []) or []:
         if not isinstance(item, dict):
@@ -138,10 +157,8 @@ def make_flashcards(
     if not sources:
         return [], Usage()
     count = max(1, min(count, MAX_ITEMS))
-    prompt = FLASHCARD_PROMPT.format(
-        sources=format_sources(sources), count=count, level=level.lower()
-    )
-    payload, usage = _generate(model, prompt, settings)
+    prompt = FLASHCARD_PROMPT.format(count=count, level=level.lower())
+    payload, usage = _generate(model, prompt, settings, sources)
     cards: list[Flashcard] = []
     seen: set[str] = set()
     for item in payload.get("cards", []) or []:
@@ -172,8 +189,8 @@ def make_quiz(
     if not sources:
         return [], Usage()
     count = max(1, min(count, MAX_ITEMS))
-    prompt = QUIZ_PROMPT.format(sources=format_sources(sources), count=count, level=level.lower())
-    payload, usage = _generate(model, prompt, settings)
+    prompt = QUIZ_PROMPT.format(count=count, level=level.lower())
+    payload, usage = _generate(model, prompt, settings, sources)
 
     questions: list[QuizQuestion] = []
     for item in payload.get("questions", []) or []:

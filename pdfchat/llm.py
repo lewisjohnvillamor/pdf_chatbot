@@ -23,6 +23,30 @@ from .providers import build_openai_client, describe_sdk_error
 
 logger = logging.getLogger(__name__)
 
+#: Minimum prefix Anthropic will cache, by model. Below this the API silently
+#: stores nothing - no error, just cache_creation_input_tokens: 0 - so a
+#: breakpoint on a short prefix is wasted markup that reads as if it works.
+MIN_CACHEABLE_TOKENS: dict[str, int] = {
+    "claude-opus-5": 512,
+    "claude-fable-5": 512,
+    "claude-opus-4-8": 1024,
+    "claude-sonnet-5": 1024,
+    "claude-sonnet-4-6": 1024,
+    "claude-opus-4-7": 2048,
+    "claude-opus-4-6": 4096,
+    "claude-haiku-4-5": 4096,
+}
+#: Used for models not in the table. The highest published minimum, so an
+#: unknown model never gets a breakpoint that silently does nothing.
+DEFAULT_MIN_CACHEABLE_TOKENS = 4096
+
+
+def is_worth_caching(text: str, model: str) -> bool:
+    """Is ``text`` long enough that Anthropic will actually cache it?"""
+    minimum = MIN_CACHEABLE_TOKENS.get(model, DEFAULT_MIN_CACHEABLE_TOKENS)
+    return len(text) // 4 >= minimum
+
+
 _JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 _BARE_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -72,9 +96,23 @@ class ChatModel(Protocol):
     name: str
     provider: str
 
-    def complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Completion: ...
+    def complete(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int | None = None,
+        cache_prefix: str | None = None,
+    ) -> Completion: ...
 
-    def stream(self, system: str, user: str, *, max_tokens: int | None = None) -> Iterator[str]: ...
+    def stream(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int | None = None,
+        cache_prefix: str | None = None,
+    ) -> Iterator[str]: ...
 
     def last_usage(self) -> Usage: ...
 
@@ -110,14 +148,39 @@ class AnthropicChat:
         self._last = Usage()
 
     # ------------------------------------------------------------------
-    def _request_kwargs(self, system: str, user: str, max_tokens: int | None) -> dict[str, Any]:
+    def _request_kwargs(
+        self,
+        system: str,
+        user: str,
+        max_tokens: int | None,
+        cache_prefix: str | None = None,
+    ) -> dict[str, Any]:
+        """Build the request, placing a cache breakpoint where it can pay off.
+
+        Caching is a prefix match over tools -> system -> messages, so a
+        breakpoint on ``cache_prefix`` covers the system prompt too. The system
+        prompt alone is far below every model's minimum, which is why marking
+        it on its own cached nothing.
+        """
+        content: Any = user
+        if cache_prefix and is_worth_caching(cache_prefix + system, self.name):
+            content = [
+                {
+                    "type": "text",
+                    "text": cache_prefix,
+                    "cache_control": {"type": "ephemeral"},
+                },
+                {"type": "text", "text": user},
+            ]
+        elif cache_prefix:
+            # Too short to cache: send it as plain text rather than pretend.
+            content = f"{cache_prefix}\n{user}"
+
         return {
             "model": self.name,
             "max_tokens": max_tokens or self._settings.max_output_tokens,
-            # The system prompt is byte-stable across turns, so caching it is free
-            # recall on every follow-up question in a session.
-            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            "messages": [{"role": "user", "content": user}],
+            "system": system,
+            "messages": [{"role": "user", "content": content}],
             "thinking": {"type": "adaptive"},
             "output_config": {"effort": self._settings.effort},
         }
@@ -151,12 +214,19 @@ class AnthropicChat:
             )
         )
 
-    def complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Completion:
+    def complete(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int | None = None,
+        cache_prefix: str | None = None,
+    ) -> Completion:
         try:
             # Streaming under the hood keeps large max_tokens from hitting the
             # SDK's HTTP timeout, while still returning one finished message.
             with self._client.messages.stream(
-                **self._request_kwargs(system, user, max_tokens)
+                **self._request_kwargs(system, user, max_tokens, cache_prefix)
             ) as stream:
                 message = stream.get_final_message()
         except Exception as exc:
@@ -169,10 +239,17 @@ class AnthropicChat:
             text=text, usage=self._record(message.usage), stop_reason=message.stop_reason
         )
 
-    def stream(self, system: str, user: str, *, max_tokens: int | None = None) -> Iterator[str]:
+    def stream(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int | None = None,
+        cache_prefix: str | None = None,
+    ) -> Iterator[str]:
         try:
             with self._client.messages.stream(
-                **self._request_kwargs(system, user, max_tokens)
+                **self._request_kwargs(system, user, max_tokens, cache_prefix)
             ) as stream:
                 yield from stream.text_stream
                 self._record(stream.get_final_message().usage)
@@ -205,8 +282,13 @@ class OpenAIChat:
         self.name = settings.chat_model
         self._last = Usage()
 
-    def _messages(self, system: str, user: str) -> list[dict[str, str]]:
-        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    def _messages(
+        self, system: str, user: str, cache_prefix: str | None = None
+    ) -> list[dict[str, str]]:
+        # OpenAI caches long prefixes automatically with no request-side markup,
+        # so the prefix only has to stay first and byte-stable.
+        content = f"{cache_prefix}\n{user}" if cache_prefix else user
+        return [{"role": "system", "content": system}, {"role": "user", "content": content}]
 
     def _record(self, usage: Any) -> Usage:
         input_tokens = getattr(usage, "prompt_tokens", 0) or 0
@@ -227,12 +309,19 @@ class OpenAIChat:
             )
         )
 
-    def complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Completion:
+    def complete(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int | None = None,
+        cache_prefix: str | None = None,
+    ) -> Completion:
         try:
             response = self._client.chat.completions.create(
                 model=self.name,
                 max_tokens=max_tokens or self._settings.max_output_tokens,
-                messages=self._messages(system, user),
+                messages=self._messages(system, user, cache_prefix),
             )
         except Exception as exc:
             raise self._translate(exc) from exc
@@ -243,12 +332,19 @@ class OpenAIChat:
             stop_reason=choice.finish_reason,
         )
 
-    def stream(self, system: str, user: str, *, max_tokens: int | None = None) -> Iterator[str]:
+    def stream(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int | None = None,
+        cache_prefix: str | None = None,
+    ) -> Iterator[str]:
         try:
             stream = self._client.chat.completions.create(
                 model=self.name,
                 max_tokens=max_tokens or self._settings.max_output_tokens,
-                messages=self._messages(system, user),
+                messages=self._messages(system, user, cache_prefix),
                 stream=True,
                 stream_options={"include_usage": True},
             )
@@ -274,8 +370,13 @@ def build_chat_model(settings: Settings) -> ChatModel:
 
 
 def complete_json(
-    model: ChatModel, system: str, user: str, *, max_tokens: int | None = None
+    model: ChatModel,
+    system: str,
+    user: str,
+    *,
+    max_tokens: int | None = None,
+    cache_prefix: str | None = None,
 ) -> tuple[dict[str, Any], Usage]:
     """Run a completion whose response is expected to be a JSON object."""
-    completion = model.complete(system, user, max_tokens=max_tokens)
+    completion = model.complete(system, user, max_tokens=max_tokens, cache_prefix=cache_prefix)
     return extract_json(completion.text), completion.usage
