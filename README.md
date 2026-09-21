@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/banner.png" alt="PDF Study Assistant — answers drawn only from your own documents, cited to the page and checked against the sources before you see them" width="100%">
+
 # 📚 PDF Study Assistant
 
 **A self-hosted study assistant that answers only from your own PDFs, cites every claim to the page, and checks itself before you see the answer.**

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360" font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="55%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#15253f"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="60%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .eyebrow{fill:#60a5fa;font-size:13px;font-weight:700;letter-spacing:.16em}
+    .title{fill:#f8fafc;font-size:52px;font-weight:800;letter-spacing:-.015em}
+    .tag{fill:#94a3b8;font-size:18.5px}
+    .pill{fill:#f1f5f9;font-size:13px;font-weight:600}
+    .card-q{fill:#64748b;font-size:13px}
+    .card-a{fill:#0f172a;font-size:14px}
+    .cite{fill:#2563eb;font-size:14px;font-weight:700}
+    .ok{fill:#15803d;font-size:13px;font-weight:600}
+    .src{fill:#64748b;font-size:12px}
+  </style>
+
+  <rect width="1280" height="360" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1280" height="4" fill="url(#rule)"/>
+
+  <!-- left: identity -->
+  <text x="64" y="78" class="eyebrow">OPEN SOURCE · SELF-HOSTED · MIT</text>
+  <text x="64" y="140" class="title">PDF Study Assistant</text>
+  <text x="64" y="182" class="tag">Answers drawn only from your own documents — cited to the</text>
+  <text x="64" y="209" class="tag">page, and checked against the sources before you see them.</text>
+
+  <g>
+    <rect x="64"  y="240" width="146" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="84"  y="261" class="pill">Hybrid retrieval</text>
+    <rect x="222" y="240" width="128" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="242" y="261" class="pill">Page citations</text>
+    <rect x="362" y="240" width="152" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="382" y="261" class="pill">Grounding check</text>
+    <rect x="526" y="240" width="118" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="546" y="261" class="pill">Study tools</text>
+  </g>
+
+  <text x="64" y="316" class="src" fill="#64748b">Claude or GPT · Postgres + pgvector · Docker · 245 tests · measured with a retrieval eval harness</text>
+
+  <!-- right: what an answer actually looks like -->
+  <g>
+    <rect x="712" y="56" width="504" height="248" rx="14" fill="#f8fafc" stroke="#1e293b" stroke-width="1.5"/>
+
+    <rect x="712" y="56" width="504" height="40" rx="14" fill="#eef2f7"/>
+    <rect x="712" y="82" width="504" height="14" fill="#eef2f7"/>
+    <circle cx="734" cy="76" r="5" fill="#cbd5e1"/>
+    <circle cx="750" cy="76" r="5" fill="#cbd5e1"/>
+    <circle cx="766" cy="76" r="5" fill="#cbd5e1"/>
+    <text x="786" y="81" class="card-q">Where does cellular respiration take place?</text>
+
+    <text x="736" y="130" class="card-a">Cellular respiration takes place in the mitochondria</text>
+    <text x="736" y="152" class="card-a">of eukaryotic cells <tspan class="cite">[S1]</tspan>, yielding about 32 molecules</text>
+    <text x="736" y="174" class="card-a">of ATP per molecule of glucose <tspan class="cite">[S1]</tspan>.</text>
+
+    <rect x="736" y="192" width="456" height="30" rx="8" fill="#f0fdf4" stroke="#86efac"/>
+    <text x="752" y="212" class="ok">✓  Every claim checks out against the cited passages</text>
+
+    <line x1="736" y1="240" x2="1192" y2="240" stroke="#e2e8f0"/>
+    <text x="736" y="262" class="cite" font-size="12">[S1]</text>
+    <text x="768" y="262" class="src">biology.pdf, p. 2 — CHAPTER TWO: RESPIRATION</text>
+    <text x="736" y="282" class="src" fill="#94a3b8">semantic 0.81 · keyword 6.4 · retrieved from 4 passages</text>
+  </g>
+</svg>
