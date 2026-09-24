@@ -37,8 +37,12 @@ CREATE INDEX IF NOT EXISTS pdfchat_chunks_collection_ordinal_idx
 CREATE INDEX IF NOT EXISTS pdfchat_chunks_content_trgm_idx
     ON pdfchat_chunks USING gin (content gin_trgm_ops);
 
--- The IVFFlat index is created by the application after rows exist: building it
--- on an empty table trains its centroids on nothing and destroys recall.
+-- The vector index is created by the application. HNSW (the default) needs no
+-- training data and is built at startup; IVFFlat trains its centroids at build
+-- time, so it is only created once rows exist.
+CREATE INDEX IF NOT EXISTS pdfchat_chunks_embedding_idx
+    ON pdfchat_chunks USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 
 CREATE TABLE IF NOT EXISTS pdfchat_chunks_messages (
     id              bigserial PRIMARY KEY,

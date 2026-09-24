@@ -53,7 +53,13 @@ CREATE INDEX IF NOT EXISTS {table}_content_trgm_idx
     ON {table} USING gin (content gin_trgm_ops);
 """
 
-VECTOR_INDEX_SQL = """
+HNSW_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS {table}_embedding_idx
+    ON {table} USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+"""
+
+IVFFLAT_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS {table}_embedding_idx
     ON {table} USING ivfflat (embedding vector_cosine_ops) WITH (lists = {lists});
 """
@@ -94,6 +100,7 @@ class PostgresVectorStore:
         self.dimensions = dimensions
         self._table = settings.pg_table
         self._lists = settings.pg_ivfflat_lists
+        self._index_method = settings.pg_index_method
         # A pool keeps Streamlit's per-interaction reruns from opening a new
         # connection every time the user types.
         self._pool = ConnectionPool(
@@ -107,7 +114,7 @@ class PostgresVectorStore:
 
     # ------------------------------------------------------------------
     def ensure_schema(self) -> None:
-        """Create the table, indexes and extensions if they are missing."""
+        """Create the table, extensions and indexes if they are missing."""
         try:
             with self._pool.connection() as conn:
                 conn.execute(SCHEMA_SQL.format(table=self._table, dimensions=self.dimensions))
@@ -117,20 +124,35 @@ class PostgresVectorStore:
                 f"Could not initialize the pgvector schema: {exc}. Confirm DATABASE_URL "
                 "is reachable and the role may CREATE EXTENSION."
             ) from exc
+        if self._index_method == "hnsw":
+            # HNSW has no training step, so it can be built now and stays
+            # correct as rows arrive - no rebuild attempt per insert batch.
+            self.ensure_vector_index()
 
     def ensure_vector_index(self) -> None:
-        """Build the IVFFlat index once a collection is populated.
+        """Create the approximate-nearest-neighbour index.
 
-        pgvector's IVFFlat index must be created *after* rows exist, otherwise
-        its centroids are trained on an empty table and recall collapses.
+        HNSW is the default because it needs no training data. IVFFlat trains
+        its centroids at build time, so building it on an empty table destroys
+        recall - which is why it had to be re-attempted after every insert. It
+        is kept for pgvector older than 0.5.0, where HNSW is unavailable.
         """
+        sql = (
+            HNSW_INDEX_SQL.format(table=self._table)
+            if self._index_method == "hnsw"
+            else IVFFLAT_INDEX_SQL.format(table=self._table, lists=self._lists)
+        )
         try:
             with self._pool.connection() as conn:
-                conn.execute(VECTOR_INDEX_SQL.format(table=self._table, lists=self._lists))
+                conn.execute(sql)
                 conn.commit()
         except Exception:
-            # A missing ANN index only costs speed — exact scan still answers.
-            logger.warning("pgvector_index_create_failed", exc_info=True)
+            # A missing ANN index only costs speed - exact scan still answers.
+            logger.warning(
+                "pgvector_index_create_failed",
+                extra={"method": self._index_method},
+                exc_info=True,
+            )
 
     # ------------------------------------------------------------------
     def add(self, records: list[ChunkRecord], *, collection: str) -> int:
@@ -175,7 +197,9 @@ class PostgresVectorStore:
                 conn.commit()
         except Exception as exc:
             raise RetrievalError(f"Failed to write chunks to Postgres: {exc}") from exc
-        self.ensure_vector_index()
+        if self._index_method != "hnsw":
+            # IVFFlat can only train once rows exist.
+            self.ensure_vector_index()
         logger.info("pgvector_upsert", extra={"rows": len(rows), "collection": collection})
         return len(rows)
 

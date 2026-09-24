@@ -15,6 +15,23 @@ from collections import Counter
 
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9'\-]*")
 
+#: Structured references that the plain word tokenizer destroys.
+#:
+#: "Article 7(c)" splits into "article", "7" and "c"; the last two are single
+#: characters and get dropped, so 7(a), 7(b) and 7(c) all reduce to "article"
+#: and become indistinguishable to keyword search. That is precisely the case
+#: hybrid retrieval is supposed to win - a rare exact identifier an embedding
+#: blurs away - so the identifier is emitted whole, as one atomic token.
+_IDENTIFIER = re.compile(
+    r"""
+      \d+ \s* \( \s* [a-z0-9]{1,3} \s* \)   # 7(c), 12 (a)
+    | § \s* \d+ (?: \.\d+ )*                  # section 3, 3.1
+    | \b \d+ (?: \.\d+ )+ \b                 # 3.1, 12.4.2
+    """,
+    re.VERBOSE,
+)
+_SPACES = re.compile(r"\s+")
+
 #: Very common words carry no discriminative signal and inflate scoring cost.
 STOPWORDS = frozenset(
     [
@@ -77,8 +94,16 @@ STOPWORDS = frozenset(
 
 
 def tokenize(text: str) -> list[str]:
-    """Lowercase word tokens with stopwords removed."""
-    return [t for t in _TOKEN.findall(text.lower()) if t not in STOPWORDS and len(t) > 1]
+    """Lowercase word tokens, plus any structured identifiers, stopwords removed.
+
+    Identifiers are emitted in addition to the ordinary words, not instead of
+    them, so "Article 7(c)" still matches on "article" while "7(c)" supplies
+    the discriminator that tells it from 7(a) and 7(b).
+    """
+    lowered = text.lower()
+    identifiers = [_SPACES.sub("", m.group(0)) for m in _IDENTIFIER.finditer(lowered)]
+    words = [t for t in _TOKEN.findall(lowered) if t not in STOPWORDS and len(t) > 1]
+    return identifiers + words
 
 
 class BM25:
