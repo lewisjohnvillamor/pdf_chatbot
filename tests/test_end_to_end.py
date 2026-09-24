@@ -6,6 +6,9 @@ storage, hybrid retrieval, citation resolution and grounding all run for real.
 
 from __future__ import annotations
 
+import threading
+import time
+
 import pytest
 
 from pdfchat.indexing import build_index, corpus_fingerprint
@@ -175,3 +178,107 @@ def test_unreadable_file_is_reported_not_raised(settings, fake_embedder):
     )
     assert not report.succeeded
     assert report.problems
+
+
+# --- concurrent embedding --------------------------------------------------
+def test_vectors_stay_paired_with_their_own_chunks(settings):
+    """The dangerous failure of concurrent embedding is silent misalignment.
+
+    If batches complete out of order and are collected that way, every chunk
+    keeps a vector belonging to a different chunk. Retrieval still "works" and
+    every answer is quietly wrong, so this is asserted directly.
+    """
+    import numpy as np
+
+    from pdfchat.indexing import _embed_chunks
+    from pdfchat.models import Chunk, Usage
+
+    class OutOfOrderEmbedder:
+        """Later batches finish first, to force interleaved completion."""
+
+        name = "ooo"
+        dimensions = 4
+        is_remote = True
+
+        def __init__(self):
+            self.calls = 0
+
+        def embed_documents(self, texts):
+            # Sleep less the later the batch, so ordering cannot come for free.
+            self.calls += 1
+            time.sleep(max(0.0, 0.05 - self.calls * 0.005))
+            # Encode each chunk's own ordinal into its vector.
+            rows = np.array([[float(t.split()[-1])] * 4 for t in texts], dtype=np.float32)
+            return rows, Usage(embedding_tokens=len(texts))
+
+    chunks = [Chunk(f"d:{i:05d}", "d", "f.pdf", f"passage {i}", 1, 1, i) for i in range(500)]
+    embedder = OutOfOrderEmbedder()
+    records, usage = _embed_chunks(
+        chunks, settings.with_overrides(embed_concurrency=4), embedder, lambda *_: None
+    )
+
+    assert len(records) == len(chunks)
+    for record in records:
+        expected = float(record.chunk.text.split()[-1])
+        assert record.embedding[0] == expected, (
+            f"{record.chunk.chunk_id} carries the vector for passage {record.embedding[0]:.0f}"
+        )
+    assert usage.embedding_tokens == len(chunks)
+
+
+def test_local_embedders_are_not_parallelised(settings):
+    """Threads cannot help a CPU-bound on-device model; they only add contention."""
+    import numpy as np
+
+    from pdfchat.indexing import _embed_chunks
+    from pdfchat.models import Chunk, Usage
+
+    class LocalLike:
+        name = "local"
+        dimensions = 4
+        is_remote = False
+
+        def __init__(self):
+            self.concurrent = 0
+            self.max_concurrent = 0
+            self._lock = threading.Lock()
+
+        def embed_documents(self, texts):
+            with self._lock:
+                self.concurrent += 1
+                self.max_concurrent = max(self.max_concurrent, self.concurrent)
+            time.sleep(0.01)
+            with self._lock:
+                self.concurrent -= 1
+            return np.zeros((len(texts), 4), dtype=np.float32), Usage()
+
+    chunks = [Chunk(f"d:{i:05d}", "d", "f.pdf", f"p {i}", 1, 1, i) for i in range(400)]
+    embedder = LocalLike()
+    _embed_chunks(chunks, settings.with_overrides(embed_concurrency=4), embedder, lambda *_: None)
+    assert embedder.max_concurrent == 1
+
+
+def test_progress_reaches_completion_when_batches_overlap(settings):
+    import numpy as np
+
+    from pdfchat.indexing import _embed_chunks
+    from pdfchat.models import Chunk, Usage
+
+    class Remote:
+        name = "r"
+        dimensions = 4
+        is_remote = True
+
+        def embed_documents(self, texts):
+            return np.zeros((len(texts), 4), dtype=np.float32), Usage()
+
+    seen: list[float] = []
+    chunks = [Chunk(f"d:{i:05d}", "d", "f.pdf", f"p {i}", 1, 1, i) for i in range(400)]
+    _embed_chunks(
+        chunks,
+        settings.with_overrides(embed_concurrency=4),
+        Remote(),
+        lambda fraction, _msg: seen.append(fraction),
+    )
+    assert seen and seen == sorted(seen), "progress went backwards under concurrency"
+    assert seen[-1] == pytest.approx(0.9)

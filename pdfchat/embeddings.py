@@ -30,6 +30,11 @@ class Embedder(Protocol):
 
     name: str
     dimensions: int
+    #: True when a call is a network round trip, so batches are worth issuing
+    #: concurrently. False for on-device models, where concurrency only fights
+    #: the GIL and the CPU - the same lesson as PDF extraction, except here
+    #: processes are impractical because the model would be loaded per worker.
+    is_remote: bool
 
     def embed_documents(self, texts: list[str]) -> tuple[np.ndarray, Usage]: ...
 
@@ -50,6 +55,7 @@ class NullEmbedder:
 
     name = "none"
     dimensions = 0
+    is_remote = False
 
     def embed_documents(self, texts: list[str]) -> tuple[np.ndarray, Usage]:
         return np.zeros((len(texts), 0), dtype=np.float32), Usage()
@@ -60,6 +66,8 @@ class NullEmbedder:
 
 class OpenAIEmbedder:
     """Hosted embeddings via the OpenAI embeddings endpoint."""
+
+    is_remote = True
 
     _DIMENSIONS = {"text-embedding-3-small": 1536, "text-embedding-3-large": 3072}
 
@@ -119,6 +127,8 @@ class OpenAIEmbedder:
 
 class LocalEmbedder:
     """On-device embeddings via sentence-transformers. No API key, no cost."""
+
+    is_remote = False
 
     def __init__(self, settings: Settings):
         try:

@@ -17,6 +17,7 @@ Three stages, each fixing a specific failure of the naive
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -33,6 +34,16 @@ logger = logging.getLogger(__name__)
 #: RRF damping constant. 60 is the value from the original Cormack et al.
 #: paper and is insensitive enough that tuning it rarely pays off.
 RRF_K = 60
+
+#: How long a corpus-size reading is trusted before it is taken again.
+#:
+#: The lexical index is rebuilt when the store's chunk count changes. Checking
+#: that on every query costs a COUNT round trip against Postgres - per question,
+#: and five more per study-tool run. This session's own uploads call
+#: invalidate() directly, so the count exists only to notice writes from another
+#: replica; a few seconds of staleness there is a fair trade for dropping a
+#: query from every search.
+COUNT_CACHE_SECONDS = 5.0
 
 
 def reciprocal_rank_fusion(
@@ -124,10 +135,17 @@ class HybridRetriever:
         self._bm25: BM25 | None = None
         self._bm25_chunks: list[Chunk] = []
         self._bm25_signature: tuple[str, int] | None = None
+        self._count_checked_at: float = 0.0
 
     # ------------------------------------------------------------------
     def _ensure_lexical_index(self, collection: str) -> None:
+        if self._bm25 is not None and self._bm25_signature is not None:
+            fresh_enough = (time.monotonic() - self._count_checked_at) < COUNT_CACHE_SECONDS
+            if fresh_enough and self._bm25_signature[0] == collection:
+                return
+
         signature = (collection, self._store.count(collection))
+        self._count_checked_at = time.monotonic()
         if self._bm25_signature == signature and self._bm25 is not None:
             return
         chunks = self._store.all_chunks(collection)
@@ -139,6 +157,7 @@ class HybridRetriever:
     def invalidate(self) -> None:
         """Force a lexical rebuild on the next search."""
         self._bm25_signature = None
+        self._count_checked_at = 0.0
 
     # ------------------------------------------------------------------
     def retrieve_many(

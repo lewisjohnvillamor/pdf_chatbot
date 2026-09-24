@@ -250,3 +250,47 @@ def test_retrieve_many_reports_the_embedding_cost_once(settings, fake_embedder):
     results = retriever.retrieve_many(["glucose", "enzymes", "membrane"], collection="c")
     total = sum(r.usage.embedding_tokens for r in results)
     assert total == 3, "the batched embedding cost must be counted, and only once"
+
+
+def test_corpus_size_is_not_checked_on_every_query(settings, fake_embedder):
+    """On Postgres that check is a COUNT round trip; it must not run per query."""
+
+    class CountingStore:
+        def __init__(self, inner):
+            self._inner = inner
+            self.counts = 0
+
+        def count(self, collection):
+            self.counts += 1
+            return self._inner.count(collection)
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    store = CountingStore(build_store(fake_embedder))
+    retriever = HybridRetriever(store, fake_embedder, settings)
+    for _ in range(10):
+        retriever.retrieve("glucose energy", collection="c")
+    assert store.counts == 1, f"{store.counts} count queries for 10 searches"
+
+
+def test_invalidate_forces_the_next_query_to_re_check(settings, fake_embedder):
+    from pdfchat.stores.base import ChunkRecord
+
+    store = build_store(fake_embedder)
+    retriever = HybridRetriever(store, fake_embedder, settings)
+    retriever.retrieve("glucose", collection="c")
+
+    text = "Osmosis moves water across a semipermeable membrane."
+    store.add(
+        [
+            ChunkRecord(
+                chunk=make_chunk("doc1:00099", text),
+                embedding=fake_embedder.embed_documents([text])[0][0],
+            )
+        ],
+        collection="c",
+    )
+    retriever.invalidate()
+    result = retriever.retrieve("osmosis semipermeable", collection="c")
+    assert "osmosis" in result.chunks[0].chunk.text.lower()
