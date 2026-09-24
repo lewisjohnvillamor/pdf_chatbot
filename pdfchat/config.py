@@ -22,6 +22,7 @@ _TABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ChatProvider = Literal["anthropic", "openai"]
 EmbeddingProvider = Literal["openai", "local", "none"]
 VectorStoreBackend = Literal["memory", "postgres"]
+PgIndexMethod = Literal["hnsw", "ivfflat"]
 RerankerBackend = Literal["none", "cross-encoder", "llm"]
 
 #: Chat models we know how to price, in USD per 1M tokens (input, output).
@@ -158,6 +159,9 @@ class Settings:
     pg_table: str = "pdfchat_chunks"
     pg_pool_size: int = 8
     pg_ivfflat_lists: int = 100
+    #: HNSW builds on an empty table and gives better recall than IVFFlat at a
+    #: comparable query speed; IVFFlat remains for pgvector older than 0.5.0.
+    pg_index_method: PgIndexMethod = "hnsw"
     persist_conversations: bool = True
 
     # --- access control --------------------------------------------------
@@ -216,6 +220,10 @@ class Settings:
                     "VECTOR_STORE=postgres needs embeddings; set EMBEDDING_PROVIDER "
                     "to 'openai' or 'local'."
                 )
+        if self.pg_index_method not in ("hnsw", "ivfflat"):
+            raise ConfigError(
+                f"Unknown PG_INDEX_METHOD {self.pg_index_method!r}; expected 'hnsw' or 'ivfflat'."
+            )
         if not _TABLE_NAME_RE.match(self.pg_table):
             # The table name is interpolated into SQL, so it must be a plain
             # identifier — never accept arbitrary text here.
@@ -285,6 +293,7 @@ def load_settings() -> Settings:
         pg_table=_env_str("PG_TABLE", "pdfchat_chunks"),
         pg_pool_size=_env_int("PG_POOL_SIZE", 8),
         pg_ivfflat_lists=_env_int("PG_IVFFLAT_LISTS", 100),
+        pg_index_method=_env_str("PG_INDEX_METHOD", "hnsw").lower(),  # type: ignore[arg-type]
         persist_conversations=_env_bool("PERSIST_CONVERSATIONS", True),
         app_password_hash=os.getenv("APP_PASSWORD_HASH") or None,
         session_ttl_minutes=_env_int("SESSION_TTL_MINUTES", 720),

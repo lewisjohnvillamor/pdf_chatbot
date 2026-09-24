@@ -221,3 +221,28 @@ def test_delete_clears_buffered_rows(fake_embedder):
     store.delete_collection("c")
     query, _ = fake_embedder.embed_query("content")
     assert store.search_dense(query[0], collection="c", limit=5) == []
+
+
+# --- pgvector index method -------------------------------------------------
+def test_hnsw_is_the_default_index_method():
+    assert Settings().pg_index_method == "hnsw"
+
+
+def test_index_method_is_validated():
+    with pytest.raises(ConfigError, match="PG_INDEX_METHOD"):
+        Settings(
+            vector_store="postgres",
+            database_url="postgresql://localhost/x",
+            embedding_provider="openai",
+            pg_index_method="brute-force",  # type: ignore[arg-type]
+        ).validated()
+
+
+def test_index_sql_matches_the_chosen_method():
+    from pdfchat.stores.postgres import HNSW_INDEX_SQL, IVFFLAT_INDEX_SQL
+
+    hnsw = HNSW_INDEX_SQL.format(table="t")
+    assert "USING hnsw" in hnsw
+    assert "lists" not in hnsw, "HNSW takes no training-list parameter"
+    ivf = IVFFLAT_INDEX_SQL.format(table="t", lists=100)
+    assert "USING ivfflat" in ivf and "lists = 100" in ivf

@@ -9,7 +9,7 @@
 [![CI](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-245%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-255%20passing-brightgreen.svg)](tests/)
 [![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support-yellow.svg)](https://buymeacoffee.com/lewisjohnvil)
 
 </div>
@@ -194,6 +194,25 @@ an upstream relevance vector):
 That bug was invisible without measurement. It is the reason this harness
 exists.
 
+### A second finding
+
+The README claimed hybrid retrieval catches exact terms like `Article 7(b)`.
+It did not. The word tokenizer split `Article 7(c)` into `article`, `7` and
+`c`; the last two are single characters and were discarded, so **7(a), 7(b)
+and 7(c) all reduced to `article`** and were indistinguishable to keyword
+search. Structured identifiers are now emitted whole, alongside the ordinary
+words:
+
+| | recall@1 | MRR@5 | nDCG@5 |
+| --- | --- | --- | --- |
+| Before | 0.909 | 0.933 | 0.927 |
+| After | **0.955** | **0.964** | **0.949** |
+
+One question still misses at k=1 — *"What is the maximum fine in one reporting
+period?"*, where the text says "capped at 3000 euros". No word is shared, so
+only a real embedding model can bridge it; the offline harness cannot, and says
+so.
+
 ### Guards against fooling yourself
 
 The harness refuses to produce misleading numbers:
@@ -243,6 +262,7 @@ setting. The ones that matter most:
 | `OPENAI_BASE_URL` | *(unset)* | Point at vLLM / Ollama / a gateway to self-host |
 | `EMBEDDING_PROVIDER` | `openai` | `openai`, `local`, or `none` |
 | `VECTOR_STORE` | `memory` | `memory` (cached NumPy) or `postgres` (pgvector) |
+| `PG_INDEX_METHOD` | `hnsw` | `hnsw` or `ivfflat` (pgvector < 0.5.0) |
 | `RERANKER` | `none` | `none`, `cross-encoder`, or `llm` |
 | `HYBRID_DENSE_WEIGHT` | `0.5` | 0.0 = keyword only, 1.0 = semantic only |
 | `MMR_LAMBDA` | `0.6` | Lower = more diverse passages |
@@ -299,7 +319,7 @@ make eval       # retrieval metrics
 make help       # all targets
 ```
 
-245 tests. The suite generates real PDFs with reportlab and pushes them through
+255 tests. The suite generates real PDFs with reportlab and pushes them through
 ingest → clean → chunk → embed → index → retrieve → cite. Only the chat provider
 is faked; **no test makes a network call.**
 
