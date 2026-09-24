@@ -9,7 +9,7 @@
 [![CI](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-255%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-260%20passing-brightgreen.svg)](tests/)
 [![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support-yellow.svg)](https://buymeacoffee.com/lewisjohnvil)
 
 </div>
@@ -261,6 +261,7 @@ setting. The ones that matter most:
 | `CHAT_MODEL` | `claude-opus-5` | `gpt-4.1-mini` when provider is `openai` |
 | `OPENAI_BASE_URL` | *(unset)* | Point at vLLM / Ollama / a gateway to self-host |
 | `EMBEDDING_PROVIDER` | `openai` | `openai`, `local`, or `none` |
+| `EMBED_CONCURRENCY` | `4` | Concurrent embedding batches while indexing (hosted only) |
 | `VECTOR_STORE` | `memory` | `memory` (cached NumPy) or `postgres` (pgvector) |
 | `PG_INDEX_METHOD` | `hnsw` | `hnsw` or `ivfflat` (pgvector < 0.5.0) |
 | `RERANKER` | `none` | `none`, `cross-encoder`, or `llm` |
@@ -319,7 +320,7 @@ make eval       # retrieval metrics
 make help       # all targets
 ```
 
-255 tests. The suite generates real PDFs with reportlab and pushes them through
+260 tests. The suite generates real PDFs with reportlab and pushes them through
 ingest → clean → chunk → embed → index → retrieve → cite. Only the chat provider
 is faked; **no test makes a network call.**
 

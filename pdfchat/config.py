@@ -120,6 +120,10 @@ class Settings:
     embedding_provider: EmbeddingProvider = "openai"
     embedding_model: str = "text-embedding-3-small"
     local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    #: Embedding batches issued concurrently during indexing. Only applied to
+    #: network-backed embedders; 1 disables. Raise it and you are more likely
+    #: to be rate limited, which the SDK retries but which costs wall clock.
+    embed_concurrency: int = 4
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     #: Point at any OpenAI-compatible endpoint (vLLM, Ollama, LM Studio, a
@@ -267,6 +271,7 @@ def load_settings() -> Settings:
         local_embedding_model=_env_str(
             "LOCAL_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
         ),
+        embed_concurrency=_env_int("EMBED_CONCURRENCY", 4),
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or None,
         openai_api_key=os.getenv("OPENAI_API_KEY") or None,
         openai_base_url=os.getenv("OPENAI_BASE_URL") or None,
