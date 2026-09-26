@@ -83,3 +83,78 @@ def test_simhash_is_stable_and_discriminating():
 def test_estimate_tokens_is_positive():
     assert estimate_tokens("") == 1
     assert estimate_tokens("a" * 400) == 100
+
+
+# --- banded near-duplicate lookup ------------------------------------------
+def test_banding_is_lossless_not_approximate():
+    """Banding must reject exactly what a full pairwise scan would reject.
+
+    This is the whole justification for the optimisation: it is a bucketing of
+    the same comparison, not a cheaper approximation of it. If it ever starts
+    missing pairs, boilerplate silently returns to the index.
+    """
+    import random
+
+    from pdfchat.chunking import SIMHASH_THRESHOLD, _NearDuplicateFilter
+
+    random.seed(7)
+    vocab = [f"term{i}" for i in range(500)]
+    texts = [" ".join(random.choice(vocab) for _ in range(20)) for _ in range(400)]
+    texts += texts[::37]  # inject genuine duplicates
+    random.shuffle(texts)
+    fingerprints = [simhash(t) for t in texts]
+
+    pairwise: list[int] = []
+    for fp in fingerprints:
+        if not any(hamming(fp, kept) <= SIMHASH_THRESHOLD for kept in pairwise):
+            pairwise.append(fp)
+
+    banded: list[int] = []
+    seen = _NearDuplicateFilter()
+    for fp in fingerprints:
+        if seen.is_duplicate(fp):
+            continue
+        seen.add(fp)
+        banded.append(fp)
+
+    assert banded == pairwise
+
+
+def test_near_duplicates_always_share_a_band():
+    """The pigeonhole property the losslessness rests on."""
+    import random
+
+    from pdfchat.chunking import SIMHASH_BANDS, SIMHASH_THRESHOLD, _band_keys
+
+    assert SIMHASH_BANDS > SIMHASH_THRESHOLD
+    random.seed(11)
+    base = simhash("cellular respiration releases energy from glucose molecules")
+    for _ in range(200):
+        flipped = base
+        for bit in random.sample(range(64), SIMHASH_THRESHOLD):
+            flipped ^= 1 << bit
+        assert hamming(base, flipped) <= SIMHASH_THRESHOLD
+        assert set(_band_keys(base)) & set(_band_keys(flipped)), "a close pair shared no band"
+
+
+def test_filter_accepts_a_genuinely_different_fingerprint():
+    from pdfchat.chunking import _NearDuplicateFilter
+
+    seen = _NearDuplicateFilter()
+    a = simhash("photosynthesis happens in the chloroplasts of plant cells")
+    b = simhash("the appeals committee reviews sanctions on a quarterly basis")
+    seen.add(a)
+    assert not seen.is_duplicate(b)
+    assert seen.is_duplicate(a)
+
+
+def test_boilerplate_removal_still_works_end_to_end(settings):
+    """The behaviour the optimisation must not change."""
+    boilerplate = (
+        "This document is confidential and proprietary. Unauthorised distribution "
+        "is strictly prohibited by the terms of the licence agreement in force."
+    )
+    pages = [Page(n, f"{boilerplate}\n\nUnique content for page {n}.", 200) for n in range(1, 8)]
+    document = Document("d", "dup.pdf", pages, "c" * 64, 100)
+    chunks = chunk_document(document, settings)
+    assert sum(1 for c in chunks if "strictly prohibited" in c.text) == 1

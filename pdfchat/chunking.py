@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 
 from .cleaning import looks_like_heading
@@ -31,6 +32,24 @@ _WORD = re.compile(r"[a-z0-9]+")
 MIN_CHUNK_CHARS = 120
 #: Hamming distance below which two 64-bit SimHashes count as near-duplicates.
 SIMHASH_THRESHOLD = 3
+#: Bands the 64-bit fingerprint is split into for the duplicate lookup.
+#:
+#: Comparing each fingerprint against every one kept so far is O(n^2), and it
+#: bites: 16k paragraphs took 11.6s, growing 4x for every doubling. Banding
+#: makes the lookup a dictionary probe instead of a scan.
+#:
+#: It stays EXACT rather than approximate, by pigeonhole: two fingerprints
+#: differing in at most SIMHASH_THRESHOLD bits can differ in at most that many
+#: bands, so with strictly more bands than the threshold, at least one band is
+#: necessarily identical. Every pair the pairwise scan would catch therefore
+#: shares a bucket. The assertion below is what guarantees that.
+SIMHASH_BANDS = 4
+_BAND_BITS = 64 // SIMHASH_BANDS
+_BAND_MASK = (1 << _BAND_BITS) - 1
+
+assert SIMHASH_BANDS > SIMHASH_THRESHOLD, (
+    "banding is only lossless while there are more bands than the threshold"
+)
 #: Only paragraphs at least this long are considered for duplicate removal, so
 #: short legitimate repeats ("None.", "See above.") are never dropped.
 MIN_DEDUP_CHARS = 60
@@ -64,6 +83,38 @@ def simhash(text: str, *, bits: int = 64) -> int:
 
 def hamming(a: int, b: int) -> int:
     return (a ^ b).bit_count()
+
+
+def _band_keys(fingerprint: int) -> list[tuple[int, int]]:
+    """The per-band values of a fingerprint, used as bucket keys."""
+    return [
+        (band, (fingerprint >> (band * _BAND_BITS)) & _BAND_MASK) for band in range(SIMHASH_BANDS)
+    ]
+
+
+class _NearDuplicateFilter:
+    """Rejects fingerprints close to one already accepted, in ~O(1) each.
+
+    Candidates are drawn only from the buckets the fingerprint hashes into, so
+    plausible matches alone are compared. Results are identical to comparing
+    against everything kept - see the note on SIMHASH_BANDS for why nothing can
+    be missed.
+    """
+
+    __slots__ = ("_buckets",)
+
+    def __init__(self) -> None:
+        self._buckets: dict[tuple[int, int], list[int]] = defaultdict(list)
+
+    def is_duplicate(self, fingerprint: int) -> bool:
+        seen: set[int] = set()
+        for key in _band_keys(fingerprint):
+            seen.update(self._buckets[key])
+        return any(hamming(fingerprint, other) <= SIMHASH_THRESHOLD for other in seen)
+
+    def add(self, fingerprint: int) -> None:
+        for key in _band_keys(fingerprint):
+            self._buckets[key].append(fingerprint)
 
 
 @dataclass(slots=True)
@@ -108,15 +159,15 @@ def _drop_duplicate_blocks(blocks: list[_Block]) -> list[_Block]:
     in retrieval.
     """
     kept: list[_Block] = []
-    fingerprints: list[int] = []
+    seen = _NearDuplicateFilter()
     for block in blocks:
         if len(block.text) < MIN_DEDUP_CHARS:
             kept.append(block)
             continue
         fingerprint = simhash(block.text)
-        if any(hamming(fingerprint, seen) <= SIMHASH_THRESHOLD for seen in fingerprints):
+        if seen.is_duplicate(fingerprint):
             continue
-        fingerprints.append(fingerprint)
+        seen.add(fingerprint)
         kept.append(block)
     return kept
 
@@ -230,12 +281,12 @@ def _merge_tiny_chunks(chunks: list[Chunk]) -> list[Chunk]:
 def _drop_near_duplicates(chunks: list[Chunk]) -> list[Chunk]:
     """Remove chunks that are near-identical to one already kept."""
     kept: list[Chunk] = []
-    hashes: list[int] = []
+    seen = _NearDuplicateFilter()
     for chunk in chunks:
         fingerprint = simhash(chunk.text)
-        if any(hamming(fingerprint, seen) <= SIMHASH_THRESHOLD for seen in hashes):
+        if seen.is_duplicate(fingerprint):
             continue
-        hashes.append(fingerprint)
+        seen.add(fingerprint)
         kept.append(chunk)
     # Ordinals must stay dense after removals so chunk ids remain stable.
     for position, chunk in enumerate(kept):
