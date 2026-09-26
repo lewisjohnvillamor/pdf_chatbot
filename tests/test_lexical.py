@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from pdfchat.lexical import BM25, tokenize
 
 
@@ -82,3 +84,79 @@ def test_bm25_can_now_separate_sibling_clauses():
     index = BM25(corpus)
     assert index.top_n("What does Article 7(c) allow?", 3)[0][0] == 2
     assert index.top_n("What is the penalty under Article 7(b)?", 3)[0][0] == 1
+
+
+# --- inverted index --------------------------------------------------------
+def _reference_scores(corpus, query, k1=1.5, b=0.75):
+    """The straightforward linear scan, kept here as an oracle."""
+    import math
+    from collections import Counter
+
+    freqs = [Counter(doc) for doc in corpus]
+    lengths = [len(doc) for doc in corpus]
+    n = len(corpus)
+    avg = sum(lengths) / n if n else 0.0
+    containing = Counter()
+    for f in freqs:
+        containing.update(f.keys())
+    idf = {t: math.log(1 + (n - c + 0.5) / (c + 0.5)) for t, c in containing.items()}
+
+    out = []
+    for i, f in enumerate(freqs):
+        norm = k1 * (1 - b + b * lengths[i] / avg) if avg else 0.0
+        total = 0.0
+        for term in tokenize(query):
+            fr = f.get(term)
+            if fr:
+                total += idf.get(term, 0.0) * fr * (k1 + 1) / (fr + norm)
+        out.append(total)
+    return out
+
+
+CORPUS_TEXTS = [
+    "mitochondria produce ATP through oxidative phosphorylation",
+    "photosynthesis converts light into glucose inside chloroplasts",
+    "the cell membrane regulates transport of ions and water",
+    "enzymes lower activation energy and are substrate specific",
+    "DNA replication is semiconservative and needs DNA polymerase",
+    "glucose is consumed during respiration to release energy",
+]
+
+
+def test_inverted_index_scores_match_a_linear_scan():
+    """The index changes the order of visitation, never the arithmetic."""
+    corpus = [tokenize(t) for t in CORPUS_TEXTS]
+    index = BM25(corpus)
+    for query in ["glucose energy", "DNA polymerase", "membrane ions", "nothing matches here"]:
+        expected = _reference_scores(corpus, query)
+        actual = index.scores(query)
+        assert actual == pytest.approx(expected), f"diverged on {query!r}"
+
+
+def test_top_n_agrees_with_sorting_every_score():
+    corpus = [tokenize(t) for t in CORPUS_TEXTS]
+    index = BM25(corpus)
+    query = "glucose energy respiration"
+    by_hand = sorted(
+        ((i, s) for i, s in enumerate(index.scores(query)) if s > 0),
+        key=lambda pair: pair[1],
+        reverse=True,
+    )[:3]
+    assert [i for i, _ in index.top_n(query, 3)] == [i for i, _ in by_hand]
+
+
+def test_top_n_only_returns_documents_the_query_reached():
+    index = BM25([tokenize(t) for t in CORPUS_TEXTS])
+    assert index.top_n("completely unrelated terminology", 5) == []
+
+
+def test_index_handles_a_term_absent_from_the_corpus():
+    index = BM25([tokenize(t) for t in CORPUS_TEXTS])
+    assert index.top_n("glucose nonexistentterm", 3), "a missing term must not zero the query"
+
+
+def test_empty_corpus_still_works():
+    index = BM25([])
+    assert len(index) == 0
+    assert index.scores("anything") == []
+    assert index.top_n("anything", 5) == []

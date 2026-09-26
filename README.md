@@ -9,7 +9,7 @@
 [![CI](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/lewisjohnvillamor/pdf_chatbot/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-260%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-269%20passing-brightgreen.svg)](tests/)
 [![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support-yellow.svg)](https://buymeacoffee.com/lewisjohnvil)
 
 </div>
@@ -290,8 +290,8 @@ pip install -r requirements-local.txt   # adds sentence-transformers
 | `pdfchat/config.py` | Validated settings — the only place that reads `os.environ` |
 | `pdfchat/ingest.py` | PDF reading, size/page/encryption guards, scan detection |
 | `pdfchat/cleaning.py` | Unicode normalization, de-hyphenation, header removal |
-| `pdfchat/chunking.py` | Structure-aware chunking, page provenance, dedup |
-| `pdfchat/lexical.py` | BM25 Okapi |
+| `pdfchat/chunking.py` | Structure-aware chunking, page provenance, banded SimHash dedup |
+| `pdfchat/lexical.py` | BM25 Okapi over an inverted index |
 | `pdfchat/embeddings.py` | OpenAI / local / null embedding backends |
 | `pdfchat/stores/` | `memory` (NumPy + disk cache) and `postgres` (pgvector) |
 | `pdfchat/retrieval.py` | Hybrid search: RRF fusion, reranking, MMR |
@@ -320,7 +320,7 @@ make eval       # retrieval metrics
 make help       # all targets
 ```
 
-260 tests. The suite generates real PDFs with reportlab and pushes them through
+269 tests. The suite generates real PDFs with reportlab and pushes them through
 ingest → clean → chunk → embed → index → retrieve → cite. Only the chat provider
 is faked; **no test makes a network call.**
 
