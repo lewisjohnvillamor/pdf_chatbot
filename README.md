@@ -155,7 +155,7 @@ The **🎓 Study tools** tab generates material from the same retrieved passages
 - **Summary** — cited, structured, at your chosen level
 - **Key terms** — a glossary defined from the documents
 - **Flashcards** — exportable as Anki-ready TSV
-- **Quiz** — multiple choice, scored, with explanations and sources
+- **Quiz** — multiple choice, scored, with explanations and sources. Reveal the answer key without attempting it, and download either the key or a blank sheet to print
 
 Optionally focus them on a topic; leave blank to cover the whole document.
 

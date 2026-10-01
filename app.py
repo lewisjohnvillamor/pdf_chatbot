@@ -95,6 +95,7 @@ def init_state(settings: Settings) -> None:
         "quiz": None,
         "quiz_answers": {},
         "quiz_submitted": False,
+        "quiz_revealed": False,
         "limiter": RateLimiter(max_events=settings.rate_limit_questions_per_hour),
     }
     for key, value in defaults.items():
@@ -506,6 +507,7 @@ def render_study_tools(service: ChatService) -> None:
             )
             st.session_state.quiz_answers = {}
             st.session_state.quiz_submitted = False
+            st.session_state.quiz_revealed = False
         render_quiz()
 
 
@@ -524,31 +526,77 @@ def render_quiz() -> None:
                 index=None,
                 label_visibility="collapsed",
             )
-        submitted = st.form_submit_button("Check answers", type="primary")
-    if submitted:
+        graded = st.form_submit_button("Check answers", type="primary")
+    if graded:
         st.session_state.quiz_submitted = True
+        st.session_state.quiz_revealed = False
+
+    # Revealing sits outside the form: asking for the answer key is not an
+    # attempt, so blank questions must not be scored as mistakes.
+    if st.button("Show answers", key="reveal-quiz"):
+        st.session_state.quiz_submitted = False
+        st.session_state.quiz_revealed = True
 
     if st.session_state.quiz_submitted:
-        correct = 0
-        for index, question in enumerate(questions):
-            chosen = st.session_state.quiz_answers.get(index)
-            if chosen == question.answer_index:
-                correct += 1
-                st.success(f"**{index + 1}. Correct** — {question.answer_text}")
-            else:
-                picked = question.options[chosen] if chosen is not None else "no answer"
-                st.error(
-                    f"**{index + 1}. Not quite** — you chose _{picked}_; "
-                    f"the answer is _{question.answer_text}_"
-                )
-            if question.explanation:
-                st.caption(question.explanation)
-            if question.source:
-                st.caption(f"Source: {question.source}")
-        st.metric("Score", f"{correct} / {len(questions)}")
+        render_quiz_score(questions)
+    elif st.session_state.quiz_revealed:
+        render_answer_key(questions)
+    render_quiz_downloads(questions)
+
+
+def render_quiz_rationale(question) -> None:
+    if question.explanation:
+        st.caption(question.explanation)
+    if question.source:
+        st.caption(f"Source: {question.source}")
+
+
+def render_quiz_score(questions) -> None:
+    correct = 0
+    skipped = 0
+    for index, question in enumerate(questions):
+        chosen = st.session_state.quiz_answers.get(index)
+        if chosen is None:
+            # Unanswered is neither right nor wrong — marking it as a mistake
+            # would misreport how the learner actually did.
+            skipped += 1
+            st.warning(f"**{index + 1}. Not answered** — the answer is _{question.answer_text}_")
+        elif chosen == question.answer_index:
+            correct += 1
+            st.success(f"**{index + 1}. Correct** — {question.answer_text}")
+        else:
+            st.error(
+                f"**{index + 1}. Not quite** — you chose _{question.options[chosen]}_; "
+                f"the answer is _{question.answer_text}_"
+            )
+        render_quiz_rationale(question)
+    st.metric("Score", f"{correct} / {len(questions)}")
+    if skipped:
+        st.caption(f"{skipped} question(s) left blank.")
+
+
+def render_answer_key(questions) -> None:
+    st.markdown("#### Answer key")
+    for index, question in enumerate(questions):
+        letter = chr(65 + question.answer_index)
+        st.markdown(f"**{index + 1}. {letter}** — {question.answer_text}")
+        render_quiz_rationale(question)
+
+
+def render_quiz_downloads(questions) -> None:
+    """Offer both variants: the key for revision, the blank sheet to hand out."""
+    with_key, blank = st.columns(2)
+    with with_key:
         st.download_button(
-            "Download quiz (Markdown)",
+            "Download with answer key",
             quiz_to_markdown(questions),
+            file_name="quiz-with-answers.md",
+            mime="text/markdown",
+        )
+    with blank:
+        st.download_button(
+            "Download blank quiz",
+            quiz_to_markdown(questions, include_answers=False),
             file_name="quiz.md",
             mime="text/markdown",
         )
